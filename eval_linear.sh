@@ -6,12 +6,13 @@
 #
 #!/bin/bash
 
-DATA="/datasets01/imagenet_full_size/061417/"
+DIR="/home/ubuntu/imagenet/train"
 MODELROOT="${HOME}/deepcluster_models"
 MODEL="${MODELROOT}/alexnet/checkpoint.pth.tar"
 EXP="${HOME}/deepcluster_exp/linear_classif"
 
-PYTHON="${HOME}/test/conda/bin/python"
+PYTHON="/home/ubuntu/anaconda3/envs/pytorch_p36/bin/python"
+
 
 mkdir -p ${EXP}
 
