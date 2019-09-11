@@ -320,7 +320,6 @@ def compute_features(dataloader, model, N):
                 print('{0} / {1}\t'
                     'Time: {batch_time.val:.3f} ({batch_time.avg:.3f})'
                     .format(i, len(dataloader), batch_time=batch_time))
-        break
     return features
 
 
