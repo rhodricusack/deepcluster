@@ -266,8 +266,8 @@ def train(train_loader, model, reglog, criterion, optimizer, epoch):
                   .format(epoch, i, len(train_loader), batch_time=batch_time,
                    data_time=data_time, loss=losses, top1=top1, top5=top5))
 
-        break
-    
+        
+
 def validate(val_loader, model, reglog, criterion):
     batch_time = AverageMeter()
     losses = AverageMeter()
@@ -283,7 +283,7 @@ def validate(val_loader, model, reglog, criterion):
             bs, ncrops, c, h, w = input_tensor.size()
             input_tensor = input_tensor.view(-1, c, h, w)
         target = target.cuda(async=True)
-        with torch.no_grad:
+        with torch.no_grad():
             input_var = torch.autograd.Variable(input_tensor.cuda())
             target_var = torch.autograd.Variable(target)
 

@@ -23,4 +23,4 @@ mkdir -p ${EXP}
 conda activate pytorch_p27
 
 ${PYTHON} main.py ${DIR} --exp ${EXP} --arch ${ARCH} \
-  --lr ${LR} --wd ${WD} --k ${K} --sobel --verbose --workers ${WORKERS} --checkpoints 5000
+  --lr ${LR} --wd ${WD} --k ${K} --sobel --verbose --workers ${WORKERS} --checkpoints 5000 --resume /home/ubuntu/test/exp/checkpoints/checkpoint_24.pth.tar
