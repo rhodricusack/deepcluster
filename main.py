@@ -25,6 +25,7 @@ import clustering
 import models
 from util import AverageMeter, Logger, UnifLabelSampler
 
+import boto3
 
 def parse_args():
     parser = argparse.ArgumentParser(description='PyTorch Implementation of DeepCluster')
@@ -208,6 +209,9 @@ def main(args):
                     'optimizer' : optimizer.state_dict()},
                    os.path.join(args.exp, 'checkpoint.pth.tar'))
 
+        # push checkpoint to s3
+        pushtos3(os.path.join(args.exp, 'checkpoint.pth.tar'),args.s3forresults)
+
         # save cluster assignments
         cluster_log.log(deepcluster.images_lists)
 
@@ -258,6 +262,9 @@ def train(loader, model, crit, opt, epoch):
                 'state_dict': model.state_dict(),
                 'optimizer' : opt.state_dict()
             }, path)
+
+            # push checkpoint to s3
+            pushtos3(path,args.s3forresults)
 
         target = target.cuda(async=True)
         input_var = torch.autograd.Variable(input_tensor.cuda())
@@ -322,7 +329,15 @@ def compute_features(dataloader, model, N):
                     .format(i, len(dataloader), batch_time=batch_time))
     return features
 
+def pushtos3(localpth,s3target):
+    s3_client = boto3.client('s3')
+    objectname=os.path.join(s3target['s3path'],os.path.basename(localpth))
+    response = s3_client.upload_file(localpth,s3target['bucket'],objectname)
+
+    return response
 
 if __name__ == '__main__':
-    args = parse_args()
-    main(args)
+    pushtos3('/home/ubuntu/deepcluster/testfile',{'bucket':'neurana-imaging','s3path':'rhodricusack/deepcluster_analysis/checkpoints_2019-09-11/checkpoints/'})
+    # args = parse_args()
+    # main(args)
+    
