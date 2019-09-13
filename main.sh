@@ -11,13 +11,13 @@
 # need to do
 #  conda install faiss-gpu cudatoolkit=10.0 -c pytorch # For CUDA10
 
-DIR="/dltraining/imagenet/train"
+DIR="/imagenet/train"
 ARCH="alexnet"
 LR=0.05
 WD=-5
 K=10000
 WORKERS=28
-EXP="/dltraining/deepcluster/checkpoints_2019-09-11"
+EXP="$HOME/checkpoints"
 PYTHON="/home/ubuntu/anaconda3/envs/pytorch_p27/bin/python"
 
 mkdir -p ${EXP}
