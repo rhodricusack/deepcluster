@@ -30,7 +30,7 @@ import boto3
 def parse_args():
     parser = argparse.ArgumentParser(description='PyTorch Implementation of DeepCluster')
 
-    parser.add_argument('data', metavar='DIR', help='path to dataset')
+    parser.add_argument('--data', metavar='DIR', help='path to dataset')
     parser.add_argument('--arch', '-a', type=str, metavar='ARCH',
                         choices=['alexnet', 'vgg16'], default='alexnet',
                         help='CNN architecture (default: alexnet)')
@@ -98,31 +98,28 @@ def main(args):
 
     # optionally resume from a checkpoint
     if args.resume:
-        if os.path.isfile(args.resume):
-            try:
-                print("=> loading checkpoint '{}'".format(args.resume))
+        try:
+            print("=> loading checkpoint '{}'".format(args.resume))
+            s3 = boto3.resource('s3')
+            s3.Bucket(args.bucket).download_file(args.resume, 'checkpoint.pth.tar')
+            checkpoint = torch.load('checkpoint.pth.tar')
+        except:
+            if os.path.isfile(args.resume_fallback):
+                print("=> loading fallback checkpoint '{}'".format(args.resume_fallback))
                 s3 = boto3.resource('s3')
-                s3.Bucket(args.bucket).download_file(args.resume, 'checkpoint.pth.tar')
+                s3.Bucket(args.bucket).download_file(args.resume_fallback, 'checkpoint.pth.tar')
                 checkpoint = torch.load('checkpoint.pth.tar')
-            except:
-                if os.path.isfile(args.resume_fallback):
-                    print("=> loading fallback checkpoint '{}'".format(args.resume_fallback))
-                    s3 = boto3.resource('s3')
-                    s3.Bucket(args.bucket).download_file(args.resume_fallback, 'checkpoint.pth.tar')
-                    checkpoint = torch.load('checkpoint.pth.tar')
-                else:
-                    print("No fallback checkpoint present")
-            args.start_epoch = checkpoint['epoch']
-            # remove top_layer parameters from checkpoint
-            for key in checkpoint['state_dict']:
-                if 'top_layer' in key:
-                    del checkpoint['state_dict'][key]
-            model.load_state_dict(checkpoint['state_dict'])
-            optimizer.load_state_dict(checkpoint['optimizer'])
-            print("=> loaded checkpoint '{}' (epoch {})"
-                  .format(args.resume, checkpoint['epoch']))
-        else:
-            print("=> no checkpoint found at '{}'".format(args.resume))
+            else:
+                print("No fallback checkpoint present")
+        args.start_epoch = checkpoint['epoch']
+        # remove top_layer parameters from checkpoint
+        for key in checkpoint['state_dict']:
+            if 'top_layer' in key:
+                del checkpoint['state_dict'][key]
+        model.load_state_dict(checkpoint['state_dict'])
+        optimizer.load_state_dict(checkpoint['optimizer'])
+        print("=> loaded checkpoint '{}' (epoch {})"
+                .format(args.resume, checkpoint['epoch']))
 
     # creating checkpoint repo
     exp_check = os.path.join(args.exp, 'checkpoints')

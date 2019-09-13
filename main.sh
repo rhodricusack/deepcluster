@@ -40,5 +40,5 @@ CHECKPOINTPATH="rhodricusack/deepcluster_analysis/checkpoints_2019-09-11/checkpo
 RESUME=$(aws s3 ls s3://$CHECKPOINTBUCKET/$CHECKPOINTPATH/checkpoint_ | awk '{print $4}' | sort -n -t _ -k 2 | tail -n 1)
 RESUME_FALLBACK=$(aws s3 ls s3://$CHECKPOINTBUCKET/$$CHECKPOINTPATH/checkpoint_ | awk '{print $4}' | sort -n -t _ -k 2 | tail -n 2 | head -n 1)
 
-${PYTHON} main.py ${DIR} --exp ${EXP} --arch ${ARCH} \
+${PYTHON} main.py --data ${DIR} --exp ${EXP} --arch ${ARCH} \
   --lr ${LR} --wd ${WD} --k ${K} --sobel --verbose --workers ${WORKERS} --checkpoints 5000 --resume ${CHECKPOINTPATH}/$RESUME --resume_fallback ${CHECKPOINTPATH}/$RESUME_FALLBACK --bucket $CHECKPOINTBUCKET
