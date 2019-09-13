@@ -57,6 +57,8 @@ def parse_args():
     parser.add_argument('--momentum', default=0.9, type=float, help='momentum (default: 0.9)')
     parser.add_argument('--resume', default='', type=str, metavar='PATH',
                         help='path to checkpoint (default: None)')
+    parser.add_argument('--resume_fallback', default='', type=str, metavar='PATH',
+                        help='path to fallback checkpoint in case first one is corrupted (default: None)')
     parser.add_argument('--checkpoints', type=int, default=25000,
                         help='how many iterations between two checkpoints (default: 25000)')
     parser.add_argument('--seed', type=int, default=31, help='random seed (default: 31)')
@@ -95,8 +97,15 @@ def main(args):
     # optionally resume from a checkpoint
     if args.resume:
         if os.path.isfile(args.resume):
-            print("=> loading checkpoint '{}'".format(args.resume))
-            checkpoint = torch.load(args.resume)
+            try:
+                print("=> loading checkpoint '{}'".format(args.resume))
+                checkpoint = torch.load(args.resume)
+            except:
+                if os.path.isfile(args.resume_fallback):
+                    print("=> loading fallback checkpoint '{}'".format(args.resume_fallback))
+                    checkpoint = torch.load(args.resume_fallback)
+                else:
+                    print("No fallback checkpoint present")
             args.start_epoch = checkpoint['epoch']
             # remove top_layer parameters from checkpoint
             for key in checkpoint['state_dict']:
@@ -210,7 +219,7 @@ def main(args):
                    os.path.join(args.exp, 'checkpoint.pth.tar'))
 
         # push checkpoint to s3
-        pushtos3(os.path.join(args.exp, 'checkpoint.pth.tar'),args.s3forresults)
+#        pushtos3(os.path.join(args.exp, 'checkpoint.pth.tar'),args.s3forresults)
 
         # save cluster assignments
         cluster_log.log(deepcluster.images_lists)
@@ -264,7 +273,7 @@ def train(loader, model, crit, opt, epoch):
             }, path)
 
             # push checkpoint to s3
-            pushtos3(path,args.s3forresults)
+#            pushtos3(path,args.s3forresults)
 
         target = target.cuda(async=True)
         input_var = torch.autograd.Variable(input_tensor.cuda())
@@ -337,7 +346,6 @@ def pushtos3(localpth,s3target):
     return response
 
 if __name__ == '__main__':
-    pushtos3('/home/ubuntu/deepcluster/testfile',{'bucket':'neurana-imaging','s3path':'rhodricusack/deepcluster_analysis/checkpoints_2019-09-11/checkpoints/'})
-    # args = parse_args()
-    # main(args)
+    args = parse_args()
+    main(args)
     
