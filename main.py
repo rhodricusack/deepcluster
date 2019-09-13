@@ -55,10 +55,12 @@ def parse_args():
     parser.add_argument('--batch', default=256, type=int,
                         help='mini-batch size (default: 256)')
     parser.add_argument('--momentum', default=0.9, type=float, help='momentum (default: 0.9)')
+    parser.add_argument('--bucket', default='', type=str, metavar='PATH',
+                        help='s3 bucket for checkpoints (default: None)')
     parser.add_argument('--resume', default='', type=str, metavar='PATH',
-                        help='path to checkpoint (default: None)')
+                        help='s3 key to checkpoint (default: None)')
     parser.add_argument('--resume_fallback', default='', type=str, metavar='PATH',
-                        help='path to fallback checkpoint in case first one is corrupted (default: None)')
+                        help='s3 key to fallback checkpoint in case first one is corrupted (default: None)')
     parser.add_argument('--checkpoints', type=int, default=25000,
                         help='how many iterations between two checkpoints (default: 25000)')
     parser.add_argument('--seed', type=int, default=31, help='random seed (default: 31)')
@@ -99,11 +101,15 @@ def main(args):
         if os.path.isfile(args.resume):
             try:
                 print("=> loading checkpoint '{}'".format(args.resume))
-                checkpoint = torch.load(args.resume)
+                s3 = boto3.resource('s3')
+                s3.Bucket(args.bucket).download_file(args.resume, 'checkpoint.pth.tar')
+                checkpoint = torch.load('checkpoint.pth.tar')
             except:
                 if os.path.isfile(args.resume_fallback):
                     print("=> loading fallback checkpoint '{}'".format(args.resume_fallback))
-                    checkpoint = torch.load(args.resume_fallback)
+                    s3 = boto3.resource('s3')
+                    s3.Bucket(args.bucket).download_file(args.resume_fallback, 'checkpoint.pth.tar')
+                    checkpoint = torch.load('checkpoint.pth.tar')
                 else:
                     print("No fallback checkpoint present")
             args.start_epoch = checkpoint['epoch']
@@ -219,7 +225,7 @@ def main(args):
                    os.path.join(args.exp, 'checkpoint.pth.tar'))
 
         # push checkpoint to s3
-#        pushtos3(os.path.join(args.exp, 'checkpoint.pth.tar'),args.s3forresults)
+        pushtos3(os.path.join(args.exp, 'checkpoint.pth.tar'),args.s3forresults)
 
         # save cluster assignments
         cluster_log.log(deepcluster.images_lists)
@@ -273,8 +279,8 @@ def train(loader, model, crit, opt, epoch):
             }, path)
 
             # push checkpoint to s3
-#            pushtos3(path,args.s3forresults)
-
+            pushtos3(path,args.s3forresults)
+            
         target = target.cuda(async=True)
         input_var = torch.autograd.Variable(input_tensor.cuda())
         target_var = torch.autograd.Variable(target)
