@@ -129,9 +129,9 @@ def main(args):
 
         # Push stdout and stderr to s3
         if args.stdoutfile:
-            pushtos3(args.stdoutfile,['bucket':args.bucket,'s3path':args.s3forresults])
+            pushtos3(args.stdoutfile,{'bucket':args.bucket,'s3path':args.s3forresults})
         if args.stderrfile:
-            pushtos3(args.stderrfile,['bucket':args.bucket,'s3path':args.s3forresults])
+            pushtos3(args.stderrfile,{'bucket':args.bucket,'s3path':args.s3forresults})
 
     # creating checkpoint repo
     exp_check = os.path.join(args.exp, 'checkpoints')
@@ -234,7 +234,7 @@ def main(args):
                    os.path.join(args.exp, 'checkpoint.pth.tar'))
 
         # push checkpoint to s3
-        pushtos3(os.path.join(args.exp, 'checkpoint.pth.tar'),['bucket':args.bucket,'s3path':args.s3forresults])
+        pushtos3(os.path.join(args.exp, 'checkpoint.pth.tar'),{'bucket':args.bucket,'s3path':args.s3forresults})
 
         # save cluster assignments
         cluster_log.log(deepcluster.images_lists)
@@ -288,7 +288,7 @@ def train(loader, model, crit, opt, epoch):
             }, path)
 
             # push checkpoint to s3
-            pushtos3(path,['bucket':args.bucket,'s3path':args.s3forresults])
+            pushtos3(path,{'bucket':args.bucket,'s3path':args.s3forresults})
             
         target = target.cuda(async=True)
         input_var = torch.autograd.Variable(input_tensor.cuda())
