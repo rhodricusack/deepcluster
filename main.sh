@@ -44,4 +44,4 @@ STDERRFILE=$HOME/main_stderr.log
 STDOUTFILE=$HOME/main_stdout.log
 
 ${PYTHON} main.py ${DIR} --exp ${EXP} --arch ${ARCH} \
-  --lr ${LR} --wd ${WD} --k ${K} --sobel --verbose --workers ${WORKERS} --checkpoints 5000 --resume ${CHECKPOINTPATH}/$RESUME --resume_fallback ${CHECKPOINTPATH}/$RESUME_FALLBACK --bucket $CHECKPOINTBUCKET --s3forresults $CHECKPOINTPATH --stdoutfile $STDOUTFILE --stderrfile $STDERRFILE >1${STDOUTFILE} >2${STDERRFILE} 
+  --lr ${LR} --wd ${WD} --k ${K} --sobel --verbose --workers ${WORKERS} --checkpoints 5000 --resume ${CHECKPOINTPATH}/$RESUME --resume_fallback ${CHECKPOINTPATH}/$RESUME_FALLBACK --bucket $CHECKPOINTBUCKET --s3forresults $CHECKPOINTPATH --stdoutfile $STDOUTFILE --stderrfile $STDERRFILE 1>${STDOUTFILE} 2>${STDERRFILE} 
