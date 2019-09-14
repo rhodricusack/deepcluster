@@ -290,6 +290,9 @@ def train(loader, model, crit, opt, epoch):
             # push checkpoint to s3
             pushtos3(path,{'bucket':args.bucket,'s3path':args.s3forresults})
             
+            # now remove local file so we don't run out of disc
+            os.remove(path)
+
         target = target.cuda(async=True)
         input_var = torch.autograd.Variable(input_tensor.cuda())
         target_var = torch.autograd.Variable(target)
