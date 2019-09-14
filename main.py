@@ -57,10 +57,16 @@ def parse_args():
     parser.add_argument('--momentum', default=0.9, type=float, help='momentum (default: 0.9)')
     parser.add_argument('--bucket', default='', type=str, metavar='PATH',
                         help='s3 bucket for checkpoints (default: None)')
+    parser.add_argument('--s3forresults', default='', type=str, metavar='PATH',
+                        help='s3 prefix for checkpoints (default: None)')
     parser.add_argument('--resume', default='', type=str, metavar='PATH',
                         help='s3 key to checkpoint (default: None)')
     parser.add_argument('--resume_fallback', default='', type=str, metavar='PATH',
                         help='s3 key to fallback checkpoint in case first one is corrupted (default: None)')
+    parser.add_argument('--stdoutfile', default='', type=str, metavar='PATH',
+                        help='local path to log file (default: None)')
+    parser.add_argument('--stderrfile', default='', type=str, metavar='PATH',
+                        help='local path to error file (default: None)')
     parser.add_argument('--checkpoints', type=int, default=25000,
                         help='how many iterations between two checkpoints (default: 25000)')
     parser.add_argument('--seed', type=int, default=31, help='random seed (default: 31)')
@@ -120,6 +126,12 @@ def main(args):
         optimizer.load_state_dict(checkpoint['optimizer'])
         print("=> loaded checkpoint '{}' (epoch {})"
                 .format(args.resume, checkpoint['epoch']))
+
+        # Push stdout and stderr to s3
+        if args.stdoutfile:
+            pushtos3(args.stdoutfile,args.s3forresults)
+        if args.stderrfile:
+            pushtos3(args.stderrfile,args.s3forresults)
 
     # creating checkpoint repo
     exp_check = os.path.join(args.exp, 'checkpoints')
