@@ -95,6 +95,9 @@ def main():
         checkpointfn=os.path.join(args.exp,checkpointbasename)
         conv=msgbody['conv']
 
+        # Get rid of the message from the queue if we've got this far
+        client.delete_message(ReceiptHandle=sqsreceive['Messages'][0]['ReceiptHandle'],QueueUrl=args.sqsurl)
+
         # Pull model from S3
         s3 = boto3.resource('s3')
         try:
@@ -229,8 +232,6 @@ def main():
             # Tidy up
             os.remove(modelfn)
 
-            # Get rid of the message from the queue if we've got this far
-            client.delete_message(ReceiptHandle=sqsreceive['Messages'][0]['ReceiptHandle'],QueueUrl=args.sqsurl)
 
 
 
