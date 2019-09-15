@@ -69,15 +69,25 @@ def main():
 
         # identify task
         client = boto3.client('sqs',region_name='eu-west-1')
-        sqsreceive = client.receive_message(
-            QueueUrl=args.sqsurl, MaxNumberOfMessages=1
-        )
+
+        # Retry for a minute
+        for retry in range(60):
+            sqsreceive = client.receive_message(
+                QueueUrl=args.sqsurl, MaxNumberOfMessages=1
+            )
+            if 'Messages' in sqsreceive.keys():
+                break
+            time.sleep(1.0)
+            print('Retry')
+        
+
+        if not 'Messages' in sqsreceive.keys():
+            print('No SQS found, bailing')
+            return
+
+        
         print('Received SQS:\n%s'%sqsreceive)
 
-        if sqsreceive is None or not 'Messages' in sqsreceive.keys():
-            # Bail out, nothing to do
-            print("No SQS message available")
-            return -1
 
         # Parse message into model and conv
         msgbody=json.loads(sqsreceive['Messages'][0]['Body'])
