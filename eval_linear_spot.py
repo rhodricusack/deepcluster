@@ -81,13 +81,13 @@ def main():
     # Parse message into model and conv
     msgbody=json.loads(sqsreceive['Messages'][0]['Body'])
     checkpointbasename='checkpoint_%d.pth.tar'%msgbody['epoch']
-    model=os.path.join(args.exp,checkpointbasename)
+    checkpointfn=os.path.join(args.exp,checkpointbasename)
     conv=msgbody['conv']
 
     # Pull model from S3
     s3 = boto3.resource('s3')
     try:
-        s3.Bucket(args.checkpointbucket).download_file(os.path.join(args.checkpointpath, checkpointbasename),model)
+        s3.Bucket(args.checkpointbucket).download_file(os.path.join(args.checkpointpath, checkpointbasename),checkpointfn)
     except botocore.exceptions.ClientError as e:
         if e.response['Error']['Code'] == "404":
             print("The object does not exist.")
@@ -99,12 +99,12 @@ def main():
     print("Will write output to bucket %s, %s",args.linearclassbucket,linearclassfn)
 
     # load model
-    model = load_model(model)
+    model = load_model(checkpointfn)
     model.cuda()
     cudnn.benchmark = True
 
     # Recover disc
-    os.remove(model)
+    os.remove(checkpointfn)
 
     # freeze the features layers
     for param in model.features.parameters():
