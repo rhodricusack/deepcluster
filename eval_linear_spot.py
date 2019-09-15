@@ -68,19 +68,18 @@ def main():
 
     # identify task
     client = boto3.client('sqs',region_name='eu-west-1')
-    response = client.receive_message(
+    sqsreceive = client.receive_message(
         QueueUrl=args.sqsurl,
     )
-    print('Received SQS:\n%s'%response)
+    print('Received SQS:\n%s'%sqsreceive)
 
-    if response is None:
+    if sqsreceive is None or not 'Messages' in sqsreceive.keys():
         # Bail out, nothing to do
         print("No SQS message available")
         return -1
 
     # Parse message into model and conv
-    msgbody=json.loads(response['Messages'][0]['Body'])
-    print(msgbody)
+    msgbody=json.loads(sqsreceive['Messages'][0]['Body'])
     checkpointbasename='checkpoint_%d.pth.tar'%msgbody['epoch']
     model=os.path.join(args.exp,checkpointbasename)
     conv=msgbody['conv']
@@ -211,13 +210,17 @@ def main():
         for logfile in ['prec1','prec5','loss_log']:
             localfn=os.path.join(args.exp,'log',logfile)
             response = s3_client.upload_file(localfn,args.linearclassbucket,os.path.join(linearclassfn,'log',logfile))
-            os.remove(localfn)
+            while os.path.exists(localfn):
+                os.remove(localfn)
+                time.sleep(0.1)
 
         # Tidy up
-        os.remove(modelfn)
+        while os.path.exists(modelfn):
+            os.remove(modelfn)
+            time.sleep(0.1)
 
         # Get rid of the message from the queue if we've got this far
-        client.delete_message(ReceiptHandle=response['Messages'][0]['ReceiptHandle'],QueueUrl=args.sqsurl)
+        client.delete_message(ReceiptHandle=sqsreceive['Messages'][0]['ReceiptHandle'],QueueUrl=args.sqsurl)
 
 
 
