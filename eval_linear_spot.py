@@ -78,7 +78,7 @@ def main():
             if 'Messages' in sqsreceive.keys():
                 break
             time.sleep(1.0)
-            print('Retry')
+            print('Retrying queue %s'%args.sqsurl)
         
 
         if not 'Messages' in sqsreceive.keys():
