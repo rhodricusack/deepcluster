@@ -18,11 +18,11 @@ LINEARCLASSPATH="rhodricusack/deepcluster_analysis/"
 SQSURL="https://sqs.eu-west-1.amazonaws.com/807820536621/deepcluster-linearclass.fifo"
 EXP="${HOME}/linearclass"
 echo "${EXP}"
-mkdir -p ${EXP}
 
 # This will only work for NVIDIA GPUs
 NGPUS=`lspci|grep 'NVIDIA'| wc -l`
 
 for ((tp=0;tp<NGPUS;tp++)); do 
+    mkdir -p ${EXP}_${tp}
     (CUDA_VISIBLE_DEVICES=${tp}; ${PYTHON}  eval_linear_spot.py --data ${DATA} --epochs 2 --lr 0.01 --wd -7 --verbose --exp ${EXP}_${tp} --workers 8  --checkpointbucket ${CHECKPOINTBUCKET} --checkpointpath ${CHECKPOINTPATH} --sqsurl ${SQSURL} --linearclassbucket ${LINEARCLASSBUCKET} --linearclasspath ${LINEARCLASSPATH}) &
 done
