@@ -70,7 +70,7 @@ def main():
         # identify task
         client = boto3.client('sqs',region_name='eu-west-1')
         sqsreceive = client.receive_message(
-            QueueUrl=args.sqsurl,
+            QueueUrl=args.sqsurl, MaxNumberOfMessages=1
         )
         print('Received SQS:\n%s'%sqsreceive)
 
