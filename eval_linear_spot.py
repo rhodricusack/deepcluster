@@ -331,7 +331,6 @@ def train(train_loader, model, reglog, criterion, optimizer, epoch):
                   .format(epoch, i, len(train_loader), batch_time=batch_time,
                    data_time=data_time, loss=losses, top1=top1, top5=top5))
         
-        break
         
 
 def validate(val_loader, model, reglog, criterion):
@@ -381,7 +380,6 @@ def validate(val_loader, model, reglog, criterion):
                     .format(i, len(val_loader), batch_time=batch_time,
                     loss=losses, top1=top1, top5=top5))
 
-            break
 
     return top1.avg, top5.avg, losses.avg
 
