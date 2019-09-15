@@ -36,6 +36,9 @@ parser.add_argument('--checkpointbucket', type=str, default='', help='bucket for
 parser.add_argument('--checkpointpath', type=str, default='', help='prefix on s3 for checkpoints')
 parser.add_argument('--sqsurl', type=str, default='', help='SQS URL for task')
 
+parser.add_argument('--linearclassbucket', type=str, default='', help='bucket for linearclass')
+parser.add_argument('--linearclasspath', type=str, default='', help='prefix on s3 for linearclass')
+
 parser.add_argument('--tencrops', action='store_true',
                     help='validation accuracy averaged over 10 crops')
 parser.add_argument('--exp', type=str, default='', help='exp folder')
@@ -76,15 +79,11 @@ def main():
         return -1
 
     # Parse message into model and conv
-    print(response)
     msgbody=json.loads(response['Messages'][0]['Body'])
     print(msgbody)
     checkpointbasename='checkpoint_%d.pth.tar'%msgbody['epoch']
     model=os.path.join(args.exp,checkpointbasename)
     conv=msgbody['conv']
-
-    # Get rid of the message from the queue if we've got this far
-    client.delete_message(ReceiptHandle=response['Messages'][0]['ReceiptHandle'],QueueUrl=args.sqsurl)
 
     # Pull model from S3
     s3 = boto3.resource('s3')
@@ -95,7 +94,11 @@ def main():
             print("The object does not exist.")
         else:
             raise
-        
+
+    # Prepare place for output    
+    linearclassfn=os.path.join(args.linearclasspath,"linearclass_time_%d_conv_%d"%(msgbody['epoch'],conv))
+    print("Will write output to bucket %s, %s",args.linearclassbucket,linearclassfn)
+
     # load model
     model = load_model(model)
     model.cuda()
@@ -190,6 +193,9 @@ def main():
             filename = 'model_best.pth.tar'
         else:
             filename = 'checkpoint.pth.tar'
+        
+        modelfn=os.path.join(args.exp, filename)
+
         torch.save({
             'epoch': epoch + 1,
             'arch': 'alexnet',
@@ -197,7 +203,22 @@ def main():
             'prec5': prec5,
             'best_prec1': best_prec1,
             'optimizer' : optimizer.state_dict(),
-        }, os.path.join(args.exp, filename))
+        }, modelfn)
+
+        # Write a placeholder for output to check 
+        s3_client = boto3.client('s3')
+        response = s3_client.upload_file(modelfn,args.linearclassbucket,os.path.join(linearclassfn,filename))
+        for logfile in ['prec1','prec5','loss_log']:
+            localfn=os.path.join(args.exp,'log',logfile)
+            response = s3_client.upload_file(localfn,args.linearclassbucket,os.path.join(linearclassfn,'log',logfile))
+            os.remove(localfn)
+
+        # Tidy up
+        os.remove(modelfn)
+
+        # Get rid of the message from the queue if we've got this far
+        client.delete_message(ReceiptHandle=response['Messages'][0]['ReceiptHandle'],QueueUrl=args.sqsurl)
+
 
 
 class RegLog(nn.Module):
@@ -307,7 +328,8 @@ def train(train_loader, model, reglog, criterion, optimizer, epoch):
                   'Prec@5 {top5.val:.3f} ({top5.avg:.3f})'
                   .format(epoch, i, len(train_loader), batch_time=batch_time,
                    data_time=data_time, loss=losses, top1=top1, top5=top5))
-
+        
+        break
         
 
 def validate(val_loader, model, reglog, criterion):
@@ -357,14 +379,9 @@ def validate(val_loader, model, reglog, criterion):
                     .format(i, len(val_loader), batch_time=batch_time,
                     loss=losses, top1=top1, top5=top5))
 
+            break
+
     return top1.avg, top5.avg, losses.avg
-
-def pushtos3(localpth,s3target):
-    s3_client = boto3.client('s3')
-    objectname=os.path.join(s3target['s3path'],os.path.basename(localpth))
-    response = s3_client.upload_file(localpth,s3target['bucket'],objectname)
-
-    return response
 
 if __name__ == '__main__':
     main()
