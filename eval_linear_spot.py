@@ -34,6 +34,7 @@ parser.add_argument('--data', type=str, help='path to dataset')
 #                    help='on top of which convolutional layer train logistic regression')
 parser.add_argument('--checkpointbucket', type=str, default='', help='bucket for checkpoint')
 parser.add_argument('--checkpointpath', type=str, default='', help='prefix on s3 for checkpoints')
+parser.add_argument('--sqsurl', type=str, default='', help='SQS URL for task')
 
 parser.add_argument('--tencrops', action='store_true',
                     help='validation accuracy averaged over 10 crops')
@@ -63,7 +64,7 @@ def main():
     best_prec1 = 0
 
     # identify task
-    client = boto3.client('sqs')
+    client = boto3.client('sqs',region_name='eu-west-1')
     response = client.receive_message(
         QueueUrl=args.sqsurl,
     )
@@ -71,17 +72,19 @@ def main():
 
     if response is None:
         # Bail out, nothing to do
-        print "No SQS message available"
+        print("No SQS message available")
         return -1
 
     # Parse message into model and conv
-    task=json.loads(response['Messages'][0]['MessageBody'])
-    checkpointbasename='checkpoint_%d.pth.tar'%task['epoch']
+    print(response)
+    msgbody=json.loads(response['Messages'][0]['Body'])
+    print(msgbody)
+    checkpointbasename='checkpoint_%d.pth.tar'%msgbody['epoch']
     model=os.path.join(args.exp,checkpointbasename)
-    conv=task['conv']
+    conv=msgbody['conv']
 
     # Get rid of the message from the queue if we've got this far
-    client.delete_message(ReceiptHandle=response['Messages'][0]['ReceiptHandle'])
+    client.delete_message(ReceiptHandle=response['Messages'][0]['ReceiptHandle'],QueueUrl=args.sqsurl)
 
     # Pull model from S3
     s3 = boto3.resource('s3')

@@ -18,4 +18,4 @@ EXP="${HOME}/linearclass"
 echo "${EXP}"
 mkdir -p ${EXP}
 
-${PYTHON}  eval_linear.py --data ${DATA} --epochs 2 --lr 0.01 --wd -7 --verbose --exp ${EXP} --workers 8  --checkpointbucket ${CHECKPOINTBUCKET} --checkpointpath ${CHECKPOINTPATH} --sqsurl= ${SQSURL}
+${PYTHON}  eval_linear_spot.py --data ${DATA} --epochs 2 --lr 0.01 --wd -7 --verbose --exp ${EXP} --workers 8  --checkpointbucket ${CHECKPOINTBUCKET} --checkpointpath ${CHECKPOINTPATH} --sqsurl ${SQSURL}
