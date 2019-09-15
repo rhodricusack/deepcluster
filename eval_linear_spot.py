@@ -103,6 +103,9 @@ def main():
     model.cuda()
     cudnn.benchmark = True
 
+    # Recover disc
+    os.remove(model)
+
     # freeze the features layers
     for param in model.features.parameters():
         param.requires_grad = False
@@ -210,14 +213,10 @@ def main():
         for logfile in ['prec1','prec5','loss_log']:
             localfn=os.path.join(args.exp,'log',logfile)
             response = s3_client.upload_file(localfn,args.linearclassbucket,os.path.join(linearclassfn,'log',logfile))
-            while os.path.exists(localfn):
-                os.remove(localfn)
-                time.sleep(0.1)
+            os.remove(localfn)
 
         # Tidy up
-        while os.path.exists(modelfn):
-            os.remove(modelfn)
-            time.sleep(0.1)
+        os.remove(modelfn)
 
         # Get rid of the message from the queue if we've got this far
         client.delete_message(ReceiptHandle=sqsreceive['Messages'][0]['ReceiptHandle'],QueueUrl=args.sqsurl)
