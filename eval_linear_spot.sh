@@ -24,5 +24,5 @@ mkdir -p ${EXP}
 NGPUS=`lspci|grep 'NVIDIA'| wc -l`
 
 for ((tp=0;tp<NGPUS;tp++)); do 
-    (CUDA_VISIBLE_DEVICES=${tp}; ${PYTHON}  eval_linear_spot.py --data ${DATA} --epochs 2 --lr 0.01 --wd -7 --verbose --exp ${EXP} --workers 8  --checkpointbucket ${CHECKPOINTBUCKET} --checkpointpath ${CHECKPOINTPATH} --sqsurl ${SQSURL} --linearclassbucket ${LINEARCLASSBUCKET} --linearclasspath ${LINEARCLASSPATH}) &
+    (CUDA_VISIBLE_DEVICES=${tp}; ${PYTHON}  eval_linear_spot.py --data ${DATA} --epochs 2 --lr 0.01 --wd -7 --verbose --exp ${EXP}_${tp} --workers 8  --checkpointbucket ${CHECKPOINTBUCKET} --checkpointpath ${CHECKPOINTPATH} --sqsurl ${SQSURL} --linearclassbucket ${LINEARCLASSBUCKET} --linearclasspath ${LINEARCLASSPATH}) &
 done
