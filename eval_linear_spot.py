@@ -59,167 +59,168 @@ def main():
     global args
     args = parser.parse_args()
 
-    #fix random seeds
-    torch.manual_seed(args.seed)
-    torch.cuda.manual_seed_all(args.seed)
-    np.random.seed(args.seed)
+    while True:
+        #fix random seeds
+        torch.manual_seed(args.seed)
+        torch.cuda.manual_seed_all(args.seed)
+        np.random.seed(args.seed)
 
-    best_prec1 = 0
+        best_prec1 = 0
 
-    # identify task
-    client = boto3.client('sqs',region_name='eu-west-1')
-    sqsreceive = client.receive_message(
-        QueueUrl=args.sqsurl,
-    )
-    print('Received SQS:\n%s'%sqsreceive)
+        # identify task
+        client = boto3.client('sqs',region_name='eu-west-1')
+        sqsreceive = client.receive_message(
+            QueueUrl=args.sqsurl,
+        )
+        print('Received SQS:\n%s'%sqsreceive)
 
-    if sqsreceive is None or not 'Messages' in sqsreceive.keys():
-        # Bail out, nothing to do
-        print("No SQS message available")
-        return -1
+        if sqsreceive is None or not 'Messages' in sqsreceive.keys():
+            # Bail out, nothing to do
+            print("No SQS message available")
+            return -1
 
-    # Parse message into model and conv
-    msgbody=json.loads(sqsreceive['Messages'][0]['Body'])
-    checkpointbasename='checkpoint_%d.pth.tar'%msgbody['epoch']
-    checkpointfn=os.path.join(args.exp,checkpointbasename)
-    conv=msgbody['conv']
+        # Parse message into model and conv
+        msgbody=json.loads(sqsreceive['Messages'][0]['Body'])
+        checkpointbasename='checkpoint_%d.pth.tar'%msgbody['epoch']
+        checkpointfn=os.path.join(args.exp,checkpointbasename)
+        conv=msgbody['conv']
 
-    # Pull model from S3
-    s3 = boto3.resource('s3')
-    try:
-        s3.Bucket(args.checkpointbucket).download_file(os.path.join(args.checkpointpath, checkpointbasename),checkpointfn)
-    except botocore.exceptions.ClientError as e:
-        if e.response['Error']['Code'] == "404":
-            print("The object does not exist.")
+        # Pull model from S3
+        s3 = boto3.resource('s3')
+        try:
+            s3.Bucket(args.checkpointbucket).download_file(os.path.join(args.checkpointpath, checkpointbasename),checkpointfn)
+        except botocore.exceptions.ClientError as e:
+            if e.response['Error']['Code'] == "404":
+                print("The object does not exist.")
+            else:
+                raise
+
+        # Prepare place for output    
+        linearclassfn=os.path.join(args.linearclasspath,"linearclass_time_%d_conv_%d"%(msgbody['epoch'],conv))
+        print("Will write output to bucket %s, %s",args.linearclassbucket,linearclassfn)
+
+        # load model
+        model = load_model(checkpointfn)
+        model.cuda()
+        cudnn.benchmark = True
+
+        # Recover disc
+        os.remove(checkpointfn)
+
+        # freeze the features layers
+        for param in model.features.parameters():
+            param.requires_grad = False
+
+        # define loss function (criterion) and optimizer
+        criterion = nn.CrossEntropyLoss().cuda()
+
+        # data loading code
+        traindir = os.path.join(args.data, 'train')
+        valdir = os.path.join(args.data, 'val_in_folders')
+
+        normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406],
+                                        std=[0.229, 0.224, 0.225])
+
+        if args.tencrops:
+            transformations_val = [
+                transforms.Resize(256),
+                transforms.TenCrop(224),
+                transforms.Lambda(lambda crops: torch.stack([normalize(transforms.ToTensor()(crop)) for crop in crops])),
+            ]
         else:
-            raise
+            transformations_val = [transforms.Resize(256),
+                                transforms.CenterCrop(224),
+                                transforms.ToTensor(),
+                                normalize]
 
-    # Prepare place for output    
-    linearclassfn=os.path.join(args.linearclasspath,"linearclass_time_%d_conv_%d"%(msgbody['epoch'],conv))
-    print("Will write output to bucket %s, %s",args.linearclassbucket,linearclassfn)
+        transformations_train = [transforms.Resize(256),
+                                transforms.CenterCrop(256),
+                                transforms.RandomCrop(224),
+                                transforms.RandomHorizontalFlip(),
+                                transforms.ToTensor(),
+                                normalize]
+        train_dataset = datasets.ImageFolder(
+            traindir,
+            transform=transforms.Compose(transformations_train)
+        )
 
-    # load model
-    model = load_model(checkpointfn)
-    model.cuda()
-    cudnn.benchmark = True
+        val_dataset = datasets.ImageFolder(
+            valdir,
+            transform=transforms.Compose(transformations_val)
+        )
+        train_loader = torch.utils.data.DataLoader(train_dataset,
+                                                batch_size=args.batch_size,
+                                                shuffle=True,
+                                                num_workers=args.workers,
+                                                pin_memory=True)
+        val_loader = torch.utils.data.DataLoader(val_dataset,
+                                                batch_size=int(args.batch_size/2),
+                                                shuffle=False,
+                                                num_workers=args.workers)
 
-    # Recover disc
-    os.remove(checkpointfn)
+        # logistic regression
+        reglog = RegLog(conv, len(train_dataset.classes)).cuda()
+        optimizer = torch.optim.SGD(
+            filter(lambda x: x.requires_grad, reglog.parameters()),
+            args.lr,
+            momentum=args.momentum,
+            weight_decay=10**args.weight_decay
+        )
 
-    # freeze the features layers
-    for param in model.features.parameters():
-        param.requires_grad = False
+        # create logs
+        exp_log = os.path.join(args.exp, 'log')
+        if not os.path.isdir(exp_log):
+            os.makedirs(exp_log)
 
-    # define loss function (criterion) and optimizer
-    criterion = nn.CrossEntropyLoss().cuda()
+        loss_log = Logger(os.path.join(exp_log, 'loss_log'))
+        prec1_log = Logger(os.path.join(exp_log, 'prec1'))
+        prec5_log = Logger(os.path.join(exp_log, 'prec5'))
 
-    # data loading code
-    traindir = os.path.join(args.data, 'train')
-    valdir = os.path.join(args.data, 'val_in_folders')
+        for epoch in range(args.epochs):
+            end = time.time()
 
-    normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406],
-                                     std=[0.229, 0.224, 0.225])
+            # train for one epoch
+            train(train_loader, model, reglog, criterion, optimizer, epoch)
 
-    if args.tencrops:
-        transformations_val = [
-            transforms.Resize(256),
-            transforms.TenCrop(224),
-            transforms.Lambda(lambda crops: torch.stack([normalize(transforms.ToTensor()(crop)) for crop in crops])),
-        ]
-    else:
-        transformations_val = [transforms.Resize(256),
-                               transforms.CenterCrop(224),
-                               transforms.ToTensor(),
-                               normalize]
+            # evaluate on validation set
+            prec1, prec5, loss = validate(val_loader, model, reglog, criterion)
 
-    transformations_train = [transforms.Resize(256),
-                             transforms.CenterCrop(256),
-                             transforms.RandomCrop(224),
-                             transforms.RandomHorizontalFlip(),
-                             transforms.ToTensor(),
-                             normalize]
-    train_dataset = datasets.ImageFolder(
-        traindir,
-        transform=transforms.Compose(transformations_train)
-    )
+            loss_log.log(loss)
+            prec1_log.log(prec1)
+            prec5_log.log(prec5)
 
-    val_dataset = datasets.ImageFolder(
-        valdir,
-        transform=transforms.Compose(transformations_val)
-    )
-    train_loader = torch.utils.data.DataLoader(train_dataset,
-                                               batch_size=args.batch_size,
-                                               shuffle=True,
-                                               num_workers=args.workers,
-                                               pin_memory=True)
-    val_loader = torch.utils.data.DataLoader(val_dataset,
-                                             batch_size=int(args.batch_size/2),
-                                             shuffle=False,
-                                             num_workers=args.workers)
+            # remember best prec@1 and save checkpoint
+            is_best = prec1 > best_prec1
+            best_prec1 = max(prec1, best_prec1)
+            if is_best:
+                filename = 'model_best.pth.tar'
+            else:
+                filename = 'checkpoint.pth.tar'
+            
+            modelfn=os.path.join(args.exp, filename)
 
-    # logistic regression
-    reglog = RegLog(conv, len(train_dataset.classes)).cuda()
-    optimizer = torch.optim.SGD(
-        filter(lambda x: x.requires_grad, reglog.parameters()),
-        args.lr,
-        momentum=args.momentum,
-        weight_decay=10**args.weight_decay
-    )
+            torch.save({
+                'epoch': epoch + 1,
+                'arch': 'alexnet',
+                'state_dict': model.state_dict(),
+                'prec5': prec5,
+                'best_prec1': best_prec1,
+                'optimizer' : optimizer.state_dict(),
+            }, modelfn)
 
-    # create logs
-    exp_log = os.path.join(args.exp, 'log')
-    if not os.path.isdir(exp_log):
-        os.makedirs(exp_log)
+            # Write a placeholder for output to check 
+            s3_client = boto3.client('s3')
+            response = s3_client.upload_file(modelfn,args.linearclassbucket,os.path.join(linearclassfn,filename))
+            for logfile in ['prec1','prec5','loss_log']:
+                localfn=os.path.join(args.exp,'log',logfile)
+                response = s3_client.upload_file(localfn,args.linearclassbucket,os.path.join(linearclassfn,'log',logfile))
+                os.remove(localfn)
 
-    loss_log = Logger(os.path.join(exp_log, 'loss_log'))
-    prec1_log = Logger(os.path.join(exp_log, 'prec1'))
-    prec5_log = Logger(os.path.join(exp_log, 'prec5'))
+            # Tidy up
+            os.remove(modelfn)
 
-    for epoch in range(args.epochs):
-        end = time.time()
-
-        # train for one epoch
-        train(train_loader, model, reglog, criterion, optimizer, epoch)
-
-        # evaluate on validation set
-        prec1, prec5, loss = validate(val_loader, model, reglog, criterion)
-
-        loss_log.log(loss)
-        prec1_log.log(prec1)
-        prec5_log.log(prec5)
-
-        # remember best prec@1 and save checkpoint
-        is_best = prec1 > best_prec1
-        best_prec1 = max(prec1, best_prec1)
-        if is_best:
-            filename = 'model_best.pth.tar'
-        else:
-            filename = 'checkpoint.pth.tar'
-        
-        modelfn=os.path.join(args.exp, filename)
-
-        torch.save({
-            'epoch': epoch + 1,
-            'arch': 'alexnet',
-            'state_dict': model.state_dict(),
-            'prec5': prec5,
-            'best_prec1': best_prec1,
-            'optimizer' : optimizer.state_dict(),
-        }, modelfn)
-
-        # Write a placeholder for output to check 
-        s3_client = boto3.client('s3')
-        response = s3_client.upload_file(modelfn,args.linearclassbucket,os.path.join(linearclassfn,filename))
-        for logfile in ['prec1','prec5','loss_log']:
-            localfn=os.path.join(args.exp,'log',logfile)
-            response = s3_client.upload_file(localfn,args.linearclassbucket,os.path.join(linearclassfn,'log',logfile))
-            os.remove(localfn)
-
-        # Tidy up
-        os.remove(modelfn)
-
-        # Get rid of the message from the queue if we've got this far
-        client.delete_message(ReceiptHandle=sqsreceive['Messages'][0]['ReceiptHandle'],QueueUrl=args.sqsurl)
+            # Get rid of the message from the queue if we've got this far
+            client.delete_message(ReceiptHandle=sqsreceive['Messages'][0]['ReceiptHandle'],QueueUrl=args.sqsurl)
 
 
 
