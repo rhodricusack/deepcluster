@@ -188,122 +188,126 @@ def main():
         )
 
         # Load up individual categories for AoA validation
-    if args.aoaval:
-        val_list_dataset=[]
-        val_list_loader=[]
-        for entry in valdir_list:
-            val_list_dataset.append(datasets.ImageFolder(
-                                    entry['pth'],
-                                    transform=transforms.Compose(transformations_val)))
-
-            val_list_loader.append(torch.utils.data.DataLoader(val_list_dataset[-1],
-                                             batch_size=50,
-                                             shuffle=False,
-                                             num_workers=args.workers))
-
-        train_loader = torch.utils.data.DataLoader(train_dataset,
-                                                batch_size=args.batch_size,
-                                                shuffle=True,
-                                                num_workers=args.workers,
-                                                pin_memory=True)
-        val_loader = torch.utils.data.DataLoader(val_dataset,
-                                                batch_size=int(args.batch_size/2),
-                                                shuffle=False,
-                                                num_workers=args.workers)
-
-        # logistic regression
-        reglog = RegLog(conv, len(train_dataset.classes)).cuda()
-        optimizer = torch.optim.SGD(
-            filter(lambda x: x.requires_grad, reglog.parameters()),
-            args.lr,
-            momentum=args.momentum,
-            weight_decay=10**args.weight_decay
-        )
-
-        # create logs
-        exp_log = os.path.join(args.exp, 'log')
-        if not os.path.isdir(exp_log):
-            os.makedirs(exp_log)
-
-        loss_log = Logger(os.path.join(exp_log, 'loss_log'))
-        prec1_log = Logger(os.path.join(exp_log, 'prec1'))
-        prec5_log = Logger(os.path.join(exp_log, 'prec5'))
-
-        for epoch in range(args.epochs):
-            end = time.time()
-
-
-        # If savedmodel already exists, load this 
-        savedmodelpth=os.path.join(args.exp, 'model_best.pth.tar')
-        if os.path.exists(savedmodelpth):
-            print('Loading saved decoder %s'%savedmodelpth)
-            model_with_decoder=torch.load(savedmodelpth)
-            reglog.load_state_dict(model_with_decoder['reglog_state_dict'])
-        else:
-            # train for one epoch
-            train(train_loader, model, reglog, criterion, optimizer, epoch)
-
-            # evaluate on validation set
-            prec1, prec5, loss = validate(val_loader, model, reglog, criterion)
-
-            loss_log.log(loss)
-            prec1_log.log(prec1)
-            prec5_log.log(prec5)
-
-            # remember best prec@1 and save checkpoint
-            is_best = prec1 > best_prec1
-            best_prec1 = max(prec1, best_prec1)
-            if is_best:
-                filename = 'model_best.pth.tar'
-            else:
-                filename = 'checkpoint.pth.tar'
-            
-            modelfn=os.path.join(args.exp, filename)
-
-            torch.save({
-                'epoch': epoch + 1,
-                'arch': 'alexnet',
-                'state_dict': model.state_dict(),
-                'reglog_state_dict': reglog.state_dict(),       # Also save decoding layers
-                'prec5': prec5,
-                'best_prec1': best_prec1,
-                'optimizer' : optimizer.state_dict(),
-            }, savedmodelpth)
-
-            # Save output to check 
-            s3_client = boto3.client('s3')
-            response = s3_client.upload_file(savedmodelpth,args.linearclassbucket,os.path.join(linearclassfn,savedmodelpth))
-            for logfile in ['prec1','prec5','loss_log']:
-                localfn=os.path.join(args.exp,'log',logfile)
-                response = s3_client.upload_file(localfn,args.linearclassbucket,os.path.join(linearclassfn,'log',logfile))
-                os.remove(localfn)
-
-            # Tidy up
-            os.remove(savedmodelpth)
-
         if args.aoaval:
-            # Validate individual categories, so loss can be compared to AoA
+            print("Loading individual categories for validation")
+            val_list_dataset=[]
+            val_list_loader=[]
+            for entry in valdir_list:
+                val_list_dataset.append(datasets.ImageFolder(
+                                        entry['pth'],
+                                        transform=transforms.Compose(transformations_val)))
 
-            # # To check weights loaded OK
-            # # evaluate on validation set
-            # prec1, prec5, loss = validate(val_loader, model, reglog, criterion)
+                val_list_loader.append(torch.utils.data.DataLoader(val_list_dataset[-1],
+                                                batch_size=50,
+                                                shuffle=False,
+                                                num_workers=args.workers))
 
-            # loss_log.log(loss)
-            # prec1_log.log(prec1)
-            # prec5_log.log(prec5)
+            train_loader = torch.utils.data.DataLoader(train_dataset,
+                                                    batch_size=args.batch_size,
+                                                    shuffle=True,
+                                                    num_workers=args.workers,
+                                                    pin_memory=True)
+            val_loader = torch.utils.data.DataLoader(val_dataset,
+                                                    batch_size=int(args.batch_size/2),
+                                                    shuffle=False,
+                                                    num_workers=args.workers)
 
-            aoares={}
-            
-            for idx,row in enumerate(zip(valdir_list,val_list_loader)):
+            # logistic regression
+            print("Setting up regression")
+
+            reglog = RegLog(conv, len(train_dataset.classes)).cuda()
+            optimizer = torch.optim.SGD(
+                filter(lambda x: x.requires_grad, reglog.parameters()),
+                args.lr,
+                momentum=args.momentum,
+                weight_decay=10**args.weight_decay
+            )
+
+            # create logs
+            exp_log = os.path.join(args.exp, 'log')
+            if not os.path.isdir(exp_log):
+                os.makedirs(exp_log)
+
+            loss_log = Logger(os.path.join(exp_log, 'loss_log'))
+            prec1_log = Logger(os.path.join(exp_log, 'prec1'))
+            prec5_log = Logger(os.path.join(exp_log, 'prec5'))
+
+            for epoch in range(args.epochs):
+                end = time.time()
+
+
+            # If savedmodel already exists, load this 
+            print("Looking for saved model")
+            savedmodelpth=os.path.join(args.exp, 'model_best.pth.tar')
+            if os.path.exists(savedmodelpth):
+                print('Loading saved decoder %s'%savedmodelpth)
+                model_with_decoder=torch.load(savedmodelpth)
+                reglog.load_state_dict(model_with_decoder['reglog_state_dict'])
+            else:
+                # train for one epoch
+                train(train_loader, model, reglog, criterion, optimizer, epoch)
+
                 # evaluate on validation set
-                print("AOA validation %d/%d"%(idx,len(valdir_list)))
-                prec1_tmp, prec5_tmp, loss_tmp = validate(row[1], model, reglog, criterion)
-                aoares[row[0]['node']]={'prec1':float(prec1_tmp),'prec5':float(prec5_tmp),'loss':float(loss_tmp),'aoa':row[0]['aoa']}
+                prec1, prec5, loss = validate(val_loader, model, reglog, criterion)
 
-            # Save to JSON
-            aoapth=os.path.join(args.exp, 'aoaresults.json')
-            with open(aoapth,'w') as f:
-                json.dump(aoares,f)
+                loss_log.log(loss)
+                prec1_log.log(prec1)
+                prec5_log.log(prec5)
+
+                # remember best prec@1 and save checkpoint
+                is_best = prec1 > best_prec1
+                best_prec1 = max(prec1, best_prec1)
+                if is_best:
+                    filename = 'model_best.pth.tar'
+                else:
+                    filename = 'checkpoint.pth.tar'
+                
+                modelfn=os.path.join(args.exp, filename)
+
+                torch.save({
+                    'epoch': epoch + 1,
+                    'arch': 'alexnet',
+                    'state_dict': model.state_dict(),
+                    'reglog_state_dict': reglog.state_dict(),       # Also save decoding layers
+                    'prec5': prec5,
+                    'best_prec1': best_prec1,
+                    'optimizer' : optimizer.state_dict(),
+                }, savedmodelpth)
+
+                # Save output to check 
+                s3_client = boto3.client('s3')
+                response = s3_client.upload_file(savedmodelpth,args.linearclassbucket,os.path.join(linearclassfn,savedmodelpth))
+                for logfile in ['prec1','prec5','loss_log']:
+                    localfn=os.path.join(args.exp,'log',logfile)
+                    response = s3_client.upload_file(localfn,args.linearclassbucket,os.path.join(linearclassfn,'log',logfile))
+                    os.remove(localfn)
+
+                # Tidy up
+                os.remove(savedmodelpth)
+
+            if args.aoaval:
+                # Validate individual categories, so loss can be compared to AoA
+
+                # # To check weights loaded OK
+                # # evaluate on validation set
+                # prec1, prec5, loss = validate(val_loader, model, reglog, criterion)
+
+                # loss_log.log(loss)
+                # prec1_log.log(prec1)
+                # prec5_log.log(prec5)
+
+                aoares={}
+                
+                for idx,row in enumerate(zip(valdir_list,val_list_loader)):
+                    # evaluate on validation set
+                    print("AOA validation %d/%d"%(idx,len(valdir_list)))
+                    prec1_tmp, prec5_tmp, loss_tmp = validate(row[1], model, reglog, criterion)
+                    aoares[row[0]['node']]={'prec1':float(prec1_tmp),'prec5':float(prec5_tmp),'loss':float(loss_tmp),'aoa':row[0]['aoa']}
+
+                # Save to JSON
+                aoapth=os.path.join(args.exp, 'aoaresults.json')
+                with open(aoapth,'w') as f:
+                    json.dump(aoares,f)
 
 def is_number(s):
     try:
