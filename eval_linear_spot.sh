@@ -13,7 +13,7 @@ PYTHON="/home/ubuntu/anaconda3/envs/pytorch_p36/bin/python"
 CHECKPOINTBUCKET="neurana-imaging"
 CHECKPOINTPATH="rhodricusack/deepcluster_analysis/checkpoints_2019-09-11/checkpoints"
 LINEARCLASSBUCKET="neurana-imaging"
-LINEARCLASSPATH="rhodricusack/deepcluster_analysis/"
+LINEARCLASSPATH="rhodricusack/deepcluster_analysis/linearclass/"
 
 SQSURL="https://sqs.eu-west-1.amazonaws.com/807820536621/deepcluster-linearclass.fifo"
 EXP="${HOME}/linearclass"
@@ -23,7 +23,7 @@ echo "${EXP}"
 NGPUS=`lspci|grep 'NVIDIA'| wc -l`
 
 # For testing
-NGPUS=1
+NGPUS=4
 
 for ((tp=0;tp<NGPUS;tp++)); do 
     mkdir -p ${EXP}_${tp}
