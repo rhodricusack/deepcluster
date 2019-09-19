@@ -19,7 +19,6 @@ import torchvision.transforms as transforms
 import torchvision.datasets as datasets
 
 import math
-import boto3
 
 import json
 
@@ -31,20 +30,12 @@ import multiprocessing
 multiprocessing.set_start_method('spawn', True)
 
 parser = argparse.ArgumentParser(description="""Train linear classifier on top
-                                 of frozen convolutional layers of an AlexNet.""")
+                                 of frozen convolutional layers of an CORnet-S.""")
 
 parser.add_argument('--data', type=str, help='path to dataset')
-# This stuff will be pulled from parameters pulled from SQS 
-#parser.add_argument('--model', type=str, help='path to model')
-#parser.add_argument('--conv', type=int, choices=[1, 2, 3, 4, 5],
-#                    help='on top of which convolutional layer train logistic regression')
-parser.add_argument('--checkpointbucket', type=str, default='', help='bucket for checkpoint')
-parser.add_argument('--checkpointpath', type=str, default='', help='prefix on s3 for checkpoints')
-parser.add_argument('--sqsurl', type=str, default='', help='SQS URL for task')
-
-parser.add_argument('--linearclassbucket', type=str, default='', help='bucket for linearclass')
-parser.add_argument('--linearclasspath', type=str, default='', help='prefix on s3 for linearclass')
-
+parser.add_argument('--model', type=str, help='path to model')
+parser.add_argument('--conv', type=int, choices=[0, 1, 2, 3],
+                    help='on top of which module to train logistic regression')
 parser.add_argument('--tencrops', action='store_true',
                     help='validation accuracy averaged over 10 crops')
 parser.add_argument('--aoaval', action='store_true',
@@ -67,133 +58,84 @@ def main():
     global args
     args = parser.parse_args()
 
-    while True:
-        #fix random seeds
-        torch.manual_seed(args.seed)
-        torch.cuda.manual_seed_all(args.seed)
-        np.random.seed(args.seed)
+    #fix random seeds
+    torch.manual_seed(args.seed)
+    torch.cuda.manual_seed_all(args.seed)
+    np.random.seed(args.seed)
 
-        best_prec1 = 0
+    best_prec1 = 0
 
-        # identify task
-        client = boto3.client('sqs',region_name='eu-west-1')
+    # load model
+    model = load_model(args.model)
 
-        # Retry for a minute
-        for retry in range(60):
-            sqsreceive = client.receive_message(
-                QueueUrl=args.sqsurl, MaxNumberOfMessages=1
-            )
-            if 'Messages' in sqsreceive.keys():
-                break
-            time.sleep(1.0)
-            print('Retrying queue %s'%args.sqsurl)
-        
+    cudnn.benchmark = True
 
-        if not 'Messages' in sqsreceive.keys():
-            print('No SQS found, bailing')
-            return
-
-        
-        print('Received SQS:\n%s'%sqsreceive)
-
-
-        # Parse message into model and conv
-        msgbody=json.loads(sqsreceive['Messages'][0]['Body'])
-        checkpointbasename='checkpoint_%d.pth.tar'%msgbody['epoch']
-        checkpointfn=os.path.join(args.exp,checkpointbasename)
-        conv=msgbody['conv']
-
-        # Get rid of the message from the queue if we've got this far
-        client.delete_message(ReceiptHandle=sqsreceive['Messages'][0]['ReceiptHandle'],QueueUrl=args.sqsurl)
-
-        # Pull model from S3
-        s3 = boto3.resource('s3')
+    # freeze the features layers
+    for block in model.module:
         try:
-            s3.Bucket(args.checkpointbucket).download_file(os.path.join(args.checkpointpath, checkpointbasename),checkpointfn)
-        except botocore.exceptions.ClientError as e:
-            if e.response['Error']['Code'] == "404":
-                print("The object does not exist.")
-            else:
-                raise
-
-        # Prepare place for output    
-        linearclassfn=os.path.join(args.linearclasspath,"linearclass_time_%d_conv_%d"%(msgbody['epoch'],conv))
-        print("Will write output to bucket %s, %s",args.linearclassbucket,linearclassfn)
-
-        # load model
-        model = load_model(checkpointfn)
-        model.cuda()
-        cudnn.benchmark = True
-
-        # Recover disc
-        os.remove(checkpointfn)
-
-        # freeze the features layers
-        for block in model.module:
-            try:
-                for param in block.parameters():
+            for param in block.parameters():
+                param.requires_grad = False
+        except:
+            for layer in block:
+                for param in layer.parameters():
                     param.requires_grad = False
-            except:
-                for layer in block:
-                    for param in layer.parameters():
-                        param.requires_grad = False
 
-        # define loss function (criterion) and optimizer
-        criterion = nn.CrossEntropyLoss().cuda()
+    # define loss function (criterion) and optimizer
+    criterion = nn.CrossEntropyLoss().cuda()
 
-        # data loading code
-        traindir = os.path.join(args.data, 'train')
-        valdir = os.path.join(args.data, 'val_in_folders')
-        valdir_double = os.path.join(args.data,'val_in_double_folders')
-        valdir_list=[]
+    # data loading code
+    traindir = os.path.join(args.data, 'train')
+    valdir = os.path.join(args.data, 'val_in_folders')
+    valdir_double = os.path.join(args.data,'val_in_double_folders')
+    valdir_list=[]
 
-        # Load in AoA table if needed
-        if args.aoaval:
-            aoalist=pd.read_csv('matchingAoA_ImageNet_excel.csv')
-            for index,row in aoalist.iterrows():
-                node=row['node']
-                aoa=float(row['aoa'])
-                if not math.isnan(aoa):
-                    valdir_list.append({'node':node,'pth':os.path.join(valdir_double,node),'aoa':aoa})
-                else:
-                    print('Not found %s'% node)
-                    
-            #valdir_list=valdir_list[:5] trim for testing
-            print('Using %d validation categories for aoa'%len(valdir_list))
+    # Load in AoA table if needed
+    if args.aoaval:
+        aoalist=pd.read_csv('matchingAoA_ImageNet_excel.csv')
+        for index,row in aoalist.iterrows():
+            node=row['node']
+            aoa=float(row['aoa'])
+            if not math.isnan(aoa):
+                valdir_list.append({'node':node,'pth':os.path.join(valdir_double,node),'aoa':aoa})
+            else:
+                print('Not found %s'% node)
+                
+        #valdir_list=valdir_list[:5] trim for testing
+        print('Using %d validation categories for aoa'%len(valdir_list))
 
+    normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406],
+                                     std=[0.229, 0.224, 0.225])
 
-        normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406],
-                                        std=[0.229, 0.224, 0.225])
+    # Can't do validation if the tencrops option is chosne a
+    if args.tencrops:
+        transformations_val = [
+            transforms.Resize(256),
+            transforms.TenCrop(224),
+            transforms.Lambda(lambda crops: torch.stack([normalize(transforms.ToTensor()(crop)) for crop in crops])),
+        ]
+    else:
+        transformations_val = [transforms.Resize(256),
+                               transforms.CenterCrop(224),
+                               transforms.ToTensor(),
+                               normalize]
 
-        if args.tencrops:
-            transformations_val = [
-                transforms.Resize(256),
-                transforms.TenCrop(224),
-                transforms.Lambda(lambda crops: torch.stack([normalize(transforms.ToTensor()(crop)) for crop in crops])),
-            ]
-        else:
-            transformations_val = [transforms.Resize(256),
-                                transforms.CenterCrop(224),
-                                transforms.ToTensor(),
-                                normalize]
+    transformations_train = [transforms.Resize(256),
+                             transforms.CenterCrop(256),
+                             transforms.RandomCrop(224),
+                             transforms.RandomHorizontalFlip(),
+                             transforms.ToTensor(),
+                             normalize]
+    train_dataset = datasets.ImageFolder(
+        traindir,
+        transform=transforms.Compose(transformations_train)
+    )
 
-        transformations_train = [transforms.Resize(256),
-                                transforms.CenterCrop(256),
-                                transforms.RandomCrop(224),
-                                transforms.RandomHorizontalFlip(),
-                                transforms.ToTensor(),
-                                normalize]
-        train_dataset = datasets.ImageFolder(
-            traindir,
-            transform=transforms.Compose(transformations_train)
-        )
-
-        val_dataset = datasets.ImageFolder(
+    val_dataset = datasets.ImageFolder(
             valdir,
             transform=transforms.Compose(transformations_val)
         )
-
-        # Load up individual categories for AoA validation
+    
+    # Load up individual categories for AoA validation
     if args.aoaval:
         val_list_dataset=[]
         val_list_loader=[]
@@ -207,36 +149,36 @@ def main():
                                              shuffle=False,
                                              num_workers=args.workers))
 
-        train_loader = torch.utils.data.DataLoader(train_dataset,
-                                                batch_size=args.batch_size,
-                                                shuffle=True,
-                                                num_workers=args.workers,
-                                                pin_memory=True)
-        val_loader = torch.utils.data.DataLoader(val_dataset,
-                                                batch_size=int(args.batch_size/2),
-                                                shuffle=False,
-                                                num_workers=args.workers)
+    train_loader = torch.utils.data.DataLoader(train_dataset,
+                                               batch_size=args.batch_size,
+                                               shuffle=True,
+                                               num_workers=args.workers,
+                                               pin_memory=True)
+    val_loader = torch.utils.data.DataLoader(val_dataset,
+                                             batch_size=int(args.batch_size/2),
+                                             shuffle=False,
+                                             num_workers=args.workers)
 
-        # logistic regression
-        reglog = RegLog(conv, len(train_dataset.classes)).cuda()
-        optimizer = torch.optim.SGD(
-            filter(lambda x: x.requires_grad, reglog.parameters()),
-            args.lr,
-            momentum=args.momentum,
-            weight_decay=10**args.weight_decay
-        )
+    # logistic regression
+    reglog = RegLog(args.conv, len(train_dataset.classes)).cuda()
+    optimizer = torch.optim.SGD(
+        filter(lambda x: x.requires_grad, reglog.parameters()),
+        args.lr,
+        momentum=args.momentum,
+        weight_decay=10**args.weight_decay
+    )
 
-        # create logs
-        exp_log = os.path.join(args.exp, 'log')
-        if not os.path.isdir(exp_log):
-            os.makedirs(exp_log)
+    # create logs
+    exp_log = os.path.join(args.exp, 'log')
+    if not os.path.isdir(exp_log):
+        os.makedirs(exp_log)
 
-        loss_log = Logger(os.path.join(exp_log, 'loss_log'))
-        prec1_log = Logger(os.path.join(exp_log, 'prec1'))
-        prec5_log = Logger(os.path.join(exp_log, 'prec5'))
+    loss_log = Logger(os.path.join(exp_log, 'loss_log'))
+    prec1_log = Logger(os.path.join(exp_log, 'prec1'))
+    prec5_log = Logger(os.path.join(exp_log, 'prec5'))
 
-        for epoch in range(args.epochs):
-            end = time.time()
+    for epoch in range(args.epochs):
+        end = time.time()
 
 
         # If savedmodel already exists, load this 
@@ -248,7 +190,6 @@ def main():
         else:
             # train for one epoch
             train(train_loader, model, reglog, criterion, optimizer, epoch)
-
             # evaluate on validation set
             prec1, prec5, loss = validate(val_loader, model, reglog, criterion)
 
@@ -263,9 +204,6 @@ def main():
                 filename = 'model_best.pth.tar'
             else:
                 filename = 'checkpoint.pth.tar'
-            
-            modelfn=os.path.join(args.exp, filename)
-
             torch.save({
                 'epoch': epoch + 1,
                 'arch': 'alexnet',
@@ -275,17 +213,6 @@ def main():
                 'best_prec1': best_prec1,
                 'optimizer' : optimizer.state_dict(),
             }, savedmodelpth)
-
-            # Save output to check 
-            s3_client = boto3.client('s3')
-            response = s3_client.upload_file(savedmodelpth,args.linearclassbucket,os.path.join(linearclassfn,savedmodelpth))
-            for logfile in ['prec1','prec5','loss_log']:
-                localfn=os.path.join(args.exp,'log',logfile)
-                response = s3_client.upload_file(localfn,args.linearclassbucket,os.path.join(linearclassfn,'log',logfile))
-                os.remove(localfn)
-
-            # Tidy up
-            os.remove(savedmodelpth)
 
         if args.aoaval:
             # Validate individual categories, so loss can be compared to AoA
@@ -318,28 +245,23 @@ def is_number(s):
     except ValueError:
         return False
 
-
-
 class RegLog(nn.Module):
     """Creates logistic regression on top of frozen features"""
     def __init__(self, conv, num_labels):
         super(RegLog, self).__init__()
         self.conv = conv
-        if conv==1:
-            self.av_pool = nn.AvgPool2d(6, stride=6, padding=3)
-            s = 9600
+        if conv==0:
+            self.av_pool = nn.AvgPool2d(5, stride=5, padding=2)
+            s = 9216
+        elif conv==1:
+            self.av_pool = nn.AvgPool2d(4, stride=4, padding=1)
+            s = 6272
         elif conv==2:
-            self.av_pool = nn.AvgPool2d(4, stride=4, padding=0)
-            s = 9216
+            self.av_pool = nn.AvgPool2d(3, stride=3, padding=1)
+            s = 6400
         elif conv==3:
-            self.av_pool = nn.AvgPool2d(3, stride=3, padding=1)
-            s = 9600
-        elif conv==4:
-            self.av_pool = nn.AvgPool2d(3, stride=3, padding=1)
-            s = 9600
-        elif conv==5:
-            self.av_pool = nn.AvgPool2d(2, stride=2, padding=0)
-            s = 9216
+            self.av_pool = nn.AvgPool2d(2, stride=2, padding=1)
+            s = 8192
         self.linear = nn.Linear(s, num_labels)
 
     def forward(self, x):
@@ -351,14 +273,29 @@ class RegLog(nn.Module):
 def forward(x, model, conv):
     if hasattr(model, 'sobel') and model.sobel is not None:
         x = model.sobel(x)
-    count = 1
-    for m in model.features.modules():
-        if not isinstance(m, nn.Sequential):
+    count = 0
+    # Start with V1
+    for m in getattr(model._modules['module'], 'V1').modules():
+        if isinstance(m, nn.Sequential):
+            for param in m.parameters():
+                    param.requires_grad = False
             x = m(x)
-        if isinstance(m, nn.ReLU):
             if count == conv:
                 return x
             count = count + 1
+
+    # Then CORnetS blocks as needed    
+    layers=['V2','V4','IT']   
+    for layer in layers:
+        for m in getattr(model._modules['module'], layer).modules():
+            if str(type(m))=="<class 'cornet.cornet_s.CORblock_S'>":     # I'm sure there is a more elegant way to do this, but CORnet_S isn't available as a class for isinstance
+                for param in m.parameters():
+                    param.requires_grad = False
+                x = m(x)
+                if count == conv:
+                    return x
+                count = count + 1
+
     return x
 
 def accuracy(output, target, topk=(1,)):
@@ -405,7 +342,7 @@ def train(train_loader, model, reglog, criterion, optimizer, epoch):
         loss = criterion(output, target_var)
         # measure accuracy and record loss
         prec1, prec5 = accuracy(output.data, target, topk=(1, 5))
-        losses.update(loss.item(), input.size(0))
+        losses.update(loss.data.item(), input.size(0))
         top1.update(prec1[0], input.size(0))
         top5.update(prec5[0], input.size(0))
 
@@ -427,8 +364,9 @@ def train(train_loader, model, reglog, criterion, optimizer, epoch):
                   'Prec@5 {top5.val:.3f} ({top5.avg:.3f})'
                   .format(epoch, i, len(train_loader), batch_time=batch_time,
                    data_time=data_time, loss=losses, top1=top1, top5=top5))
-        
-        
+
+        if i>2000:
+            break
 
 def validate(val_loader, model, reglog, criterion):
     batch_time = AverageMeter()
@@ -462,7 +400,7 @@ def validate(val_loader, model, reglog, criterion):
             top1.update(prec1[0], input_tensor.size(0))
             top5.update(prec5[0], input_tensor.size(0))
             loss = criterion(output_central, target_var)
-            losses.update(loss.item(), input_tensor.size(0))
+            losses.update(loss.data.item(), input_tensor.size(0))
 
             # measure elapsed time
             batch_time.update(time.time() - end)
@@ -476,7 +414,6 @@ def validate(val_loader, model, reglog, criterion):
                     'Prec@5 {top5.val:.3f} ({top5.avg:.3f})'
                     .format(i, len(val_loader), batch_time=batch_time,
                     loss=losses, top1=top1, top5=top5))
-
 
     return top1.avg, top5.avg, losses.avg
 
