@@ -308,6 +308,9 @@ def main():
             aoapth=os.path.join(args.exp, 'aoaresults.json')
             with open(aoapth,'w') as f:
                 json.dump(aoares,f)
+            response = s3_client.upload_file(aoapth,args.linearclassbucket,os.path.join(linearclassfn,'aoaresults.json'))
+            os.remove(aoapth)
+
 
 def is_number(s):
     try:
