@@ -431,7 +431,7 @@ def train(train_loader, model, reglog, criterion, optimizer, epoch):
         
         
 
-def validate(val_loader, model, reglog, criterion):
+def validate(val_loader, model, reglog, criterion,target_remap):
     batch_time = AverageMeter()
     losses = AverageMeter()
     top1 = AverageMeter()
