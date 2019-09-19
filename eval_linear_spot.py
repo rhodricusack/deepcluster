@@ -51,7 +51,7 @@ parser.add_argument('--tencrops', action='store_true',
 parser.add_argument('--aoaval', default=True, action='store_true',
                     help='age of acquisition style validation')
 parser.add_argument('--exp', type=str, default='/home/ubuntu/linearclass_test', help='exp folder')
-parser.add_argument('--workers', default=8, type=int,
+parser.add_argument('--workers', default=32, type=int,
                     help='number of data loading workers (default: 8)')
 parser.add_argument('--epochs', type=int, default=2, help='number of total epochs to run (default: 90)')
 parser.add_argument('--batch_size', default=256, type=int,
@@ -61,7 +61,7 @@ parser.add_argument('--momentum', default=0.9, type=float, help='momentum (defau
 parser.add_argument('--weight_decay', '--wd', default=-4, type=float,
                     help='weight decay pow (default: -4)')
 parser.add_argument('--seed', type=int, default=31, help='random seed')
-parser.add_argument('--verbose', action='store_true', help='chatty')
+parser.add_argument('--verbose', default=True, action='store_true', help='chatty')
 
 
 def main():
@@ -307,6 +307,7 @@ def main():
                 print("AOA validation %d/%d"%(idx,len(valdir_list)))
                 prec1_tmp, prec5_tmp, loss_tmp = validate(row[1], model, reglog, criterion,target_remap=val_list_remap)
                 aoares[row[0]['node']]={'prec1':float(prec1_tmp),'prec5':float(prec5_tmp),'loss':float(loss_tmp),'aoa':row[0]['aoa']}
+                
 
             # Save to JSON
             aoapth=os.path.join(args.exp, 'aoaresults.json')
@@ -433,7 +434,7 @@ def train(train_loader, model, reglog, criterion, optimizer, epoch):
                   .format(epoch, i, len(train_loader), batch_time=batch_time,
                    data_time=data_time, loss=losses, top1=top1, top5=top5))
         
-        break
+       
         
 
 def validate(val_loader, model, reglog, criterion, target_remap=None):
