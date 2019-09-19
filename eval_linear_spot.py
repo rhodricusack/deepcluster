@@ -20,6 +20,7 @@ import torchvision.datasets as datasets
 
 import math
 import boto3
+import botocore
 
 import json
 
@@ -33,26 +34,26 @@ multiprocessing.set_start_method('spawn', True)
 parser = argparse.ArgumentParser(description="""Train linear classifier on top
                                  of frozen convolutional layers of an AlexNet.""")
 
-parser.add_argument('--data', type=str, help='path to dataset')
+parser.add_argument('--data', type=str, default='/imagenet',help='path to dataset')
 # This stuff will be pulled from parameters pulled from SQS 
 #parser.add_argument('--model', type=str, help='path to model')
 #parser.add_argument('--conv', type=int, choices=[1, 2, 3, 4, 5],
 #                    help='on top of which convolutional layer train logistic regression')
-parser.add_argument('--checkpointbucket', type=str, default='', help='bucket for checkpoint')
-parser.add_argument('--checkpointpath', type=str, default='', help='prefix on s3 for checkpoints')
-parser.add_argument('--sqsurl', type=str, default='', help='SQS URL for task')
+parser.add_argument('--checkpointbucket', type=str, default='neurana-imaging', help='bucket for checkpoint')
+parser.add_argument('--checkpointpath', type=str, default='rhodricusack/deepcluster_analysis/checkpoints_2019-09-11/checkpoints', help='prefix on s3 for checkpoints')
+parser.add_argument('--sqsurl', type=str, default='https://sqs.eu-west-1.amazonaws.com/807820536621/deepcluster-linearclass.fifo', help='SQS URL for task')
 
-parser.add_argument('--linearclassbucket', type=str, default='', help='bucket for linearclass')
-parser.add_argument('--linearclasspath', type=str, default='', help='prefix on s3 for linearclass')
+parser.add_argument('--linearclassbucket', type=str, default='neurana-imaging', help='bucket for linearclass')
+parser.add_argument('--linearclasspath', type=str, default='rhodricusack/deepcluster_analysis/linearclass/', help='prefix on s3 for linearclass')
 
 parser.add_argument('--tencrops', action='store_true',
                     help='validation accuracy averaged over 10 crops')
-parser.add_argument('--aoaval', action='store_true',
+parser.add_argument('--aoaval', default=True, action='store_true',
                     help='age of acquisition style validation')
-parser.add_argument('--exp', type=str, default='', help='exp folder')
-parser.add_argument('--workers', default=4, type=int,
-                    help='number of data loading workers (default: 4)')
-parser.add_argument('--epochs', type=int, default=90, help='number of total epochs to run (default: 90)')
+parser.add_argument('--exp', type=str, default='/home/ubuntu/linearclass_test', help='exp folder')
+parser.add_argument('--workers', default=8, type=int,
+                    help='number of data loading workers (default: 8)')
+parser.add_argument('--epochs', type=int, default=2, help='number of total epochs to run (default: 90)')
 parser.add_argument('--batch_size', default=256, type=int,
                     help='mini-batch size (default: 256)')
 parser.add_argument('--lr', default=0.01, type=float, help='learning rate')
@@ -109,7 +110,9 @@ def main():
         # Pull model from S3
         s3 = boto3.resource('s3')
         try:
-            s3.Bucket(args.checkpointbucket).download_file(os.path.join(args.checkpointpath, checkpointbasename),checkpointfn)
+            s3fn=os.path.join(args.checkpointpath, checkpointbasename)
+            print("Attempting s3 download from %s"%s3fn )
+            s3.Bucket(args.checkpointbucket).download_file(s3fn,checkpointfn)
         except botocore.exceptions.ClientError as e:
             if e.response['Error']['Code'] == "404":
                 print("The object does not exist.")
@@ -192,6 +195,7 @@ def main():
             print("Loading individual categories for validation")
             val_list_dataset=[]
             val_list_loader=[]
+            val_list_remap=[]
             for entry in valdir_list:
                 val_list_dataset.append(datasets.ImageFolder(
                                         entry['pth'],
@@ -201,7 +205,7 @@ def main():
                                                 batch_size=50,
                                                 shuffle=False,
                                                 num_workers=args.workers))
-
+                val_list_remap.append(train_dataset.classes.index(entry['node']))
         train_loader = torch.utils.data.DataLoader(train_dataset,
                                                 batch_size=args.batch_size,
                                                 shuffle=True,
@@ -248,7 +252,7 @@ def main():
             train(train_loader, model, reglog, criterion, optimizer, epoch)
 
             # evaluate on validation set
-            prec1, prec5, loss = validate(val_loader, model, reglog, criterion)
+            prec1, prec5, loss = validate(val_loader, model, reglog, criterion,target_remap=range(1000))
 
             loss_log.log(loss)
             prec1_log.log(prec1)
@@ -301,7 +305,7 @@ def main():
             for idx,row in enumerate(zip(valdir_list,val_list_loader)):
                 # evaluate on validation set
                 print("AOA validation %d/%d"%(idx,len(valdir_list)))
-                prec1_tmp, prec5_tmp, loss_tmp = validate(row[1], model, reglog, criterion)
+                prec1_tmp, prec5_tmp, loss_tmp = validate(row[1], model, reglog, criterion,target_remap=val_list_remap)
                 aoares[row[0]['node']]={'prec1':float(prec1_tmp),'prec5':float(prec5_tmp),'loss':float(loss_tmp),'aoa':row[0]['aoa']}
 
             # Save to JSON
@@ -429,9 +433,11 @@ def train(train_loader, model, reglog, criterion, optimizer, epoch):
                   .format(epoch, i, len(train_loader), batch_time=batch_time,
                    data_time=data_time, loss=losses, top1=top1, top5=top5))
         
+        break
         
 
-def validate(val_loader, model, reglog, criterion):
+def validate(val_loader, model, reglog, criterion, target_remap=None):
+    # Introduced target_remap, for use when the dataloader has not loaded all 1000 objects but a subset of them
     batch_time = AverageMeter()
     losses = AverageMeter()
     top1 = AverageMeter()
@@ -445,6 +451,8 @@ def validate(val_loader, model, reglog, criterion):
         if args.tencrops:
             bs, ncrops, c, h, w = input_tensor.size()
             input_tensor = input_tensor.view(-1, c, h, w)
+        if target_remap:
+            target=torch.tensor([target_remap[x] for x in target],dtype=torch.long)
         target = target.cuda(async=True)
         with torch.no_grad():
             input_var = torch.autograd.Variable(input_tensor.cuda())
