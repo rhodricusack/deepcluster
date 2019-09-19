@@ -129,14 +129,8 @@ def main():
         os.remove(checkpointfn)
 
         # freeze the features layers
-        for block in model.module:
-            try:
-                for param in block.parameters():
-                    param.requires_grad = False
-            except:
-                for layer in block:
-                    for param in layer.parameters():
-                        param.requires_grad = False
+        for param in model.features.parameters():
+            param.requires_grad = False
 
         # define loss function (criterion) and optimizer
         criterion = nn.CrossEntropyLoss().cuda()
