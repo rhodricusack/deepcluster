@@ -2,7 +2,7 @@
 LINEARCLASSBUCKET="neurana-imaging"
 LINEARCLASSPATH="rhodricusack/deepcluster_analysis/linearclass_v2/"
 
-for ((tp=70;tp>=0;tp-=10)); do
+for ((tp=8;tp>=1;tp-=2)); do
   for ((conv=5;conv>0; conv--)); do
       gotfile=$(aws s3 ls "s3://${LINEARCLASSBUCKET}/${LINEARCLASSPATH}linearclass_time_${tp}_conv_${conv}")
       if [ -z "$gotfile" ]; then
