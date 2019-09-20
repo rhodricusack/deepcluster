@@ -206,6 +206,7 @@ def main():
                                                 shuffle=False,
                                                 num_workers=args.workers))
                 val_list_remap.append(train_dataset.classes.index(entry['node']))
+
         train_loader = torch.utils.data.DataLoader(train_dataset,
                                                 batch_size=args.batch_size,
                                                 shuffle=True,
@@ -302,10 +303,10 @@ def main():
 
             aoares={}
             
-            for idx,row in enumerate(zip(valdir_list,val_list_loader)):
+            for idx,row in enumerate(zip(valdir_list,val_list_loader,val_list_remap)):
                 # evaluate on validation set
                 print("AOA validation %d/%d"%(idx,len(valdir_list)))
-                prec1_tmp, prec5_tmp, loss_tmp = validate(row[1], model, reglog, criterion,target_remap=val_list_remap)
+                prec1_tmp, prec5_tmp, loss_tmp = validate(row[1], model, reglog, criterion,target_remap=row[2])
                 aoares[row[0]['node']]={'prec1':float(prec1_tmp),'prec5':float(prec5_tmp),'loss':float(loss_tmp),'aoa':row[0]['aoa']}
                 
 
