@@ -1,5 +1,5 @@
 {
-    "TargetCapacity": 2,
+    "TargetCapacity": 1,
     "AllocationStrategy": "lowestPrice",
     "IamFleetRole": "arn:aws:iam::807820536621:role/DL-Training-Spot-Fleet-Role",
     "LaunchSpecifications": [
