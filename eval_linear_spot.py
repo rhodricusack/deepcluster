@@ -244,11 +244,13 @@ def main():
         # If savedmodel already exists, load this 
         print("Looking for saved model")
         savedmodelpth=os.path.join(args.exp, 'model_best.pth.tar')
-        if os.path.exists(savedmodelpth):
+        s3_client = boto3.client('s3')
+        try:
+            response = s3_client.download_file(args.linearclassbucket,os.path.join(linearclassfn,filename),savedmodelpth)
             print('Loading saved decoder %s'%savedmodelpth)
             model_with_decoder=torch.load(savedmodelpth)
             reglog.load_state_dict(model_with_decoder['reglog_state_dict'])
-        else:
+        except:
             # train for one epoch
             train(train_loader, model, reglog, criterion, optimizer, epoch)
 
@@ -281,7 +283,7 @@ def main():
 
             # Save output to check 
             s3_client = boto3.client('s3')
-            response = s3_client.upload_file(savedmodelpth,args.linearclassbucket,os.path.join(linearclassfn,savedmodelpth))
+            response = s3_client.upload_file(savedmodelpth,args.linearclassbucket,os.path.join(linearclassfn,filename))
             for logfile in ['prec1','prec5','loss_log']:
                 localfn=os.path.join(args.exp,'log',logfile)
                 response = s3_client.upload_file(localfn,args.linearclassbucket,os.path.join(linearclassfn,'log',logfile))
@@ -306,7 +308,7 @@ def main():
             for idx,row in enumerate(zip(valdir_list,val_list_loader,val_list_remap)):
                 # evaluate on validation set
                 print("AOA validation %d/%d"%(idx,len(valdir_list)))
-                prec1_tmp, prec5_tmp, loss_tmp = validate(row[1], model, reglog, criterion,target_remap=row[2])
+                prec1_tmp, prec5_tmp, loss_tmp = validate(row[1], model, reglog, criterion,target_remap=[row[2]])
                 aoares[row[0]['node']]={'prec1':float(prec1_tmp),'prec5':float(prec5_tmp),'loss':float(loss_tmp),'aoa':row[0]['aoa']}
                 
 
@@ -396,6 +398,8 @@ def train(train_loader, model, reglog, criterion, optimizer, epoch):
     end = time.time()
     for i, (input, target) in enumerate(train_loader):
 
+        if i>300:
+            break
         # measure data loading time
         data_time.update(time.time() - end)
 
@@ -435,7 +439,7 @@ def train(train_loader, model, reglog, criterion, optimizer, epoch):
                   .format(epoch, i, len(train_loader), batch_time=batch_time,
                    data_time=data_time, loss=losses, top1=top1, top5=top5))
         
-       
+        
         
 
 def validate(val_loader, model, reglog, criterion, target_remap=None):
