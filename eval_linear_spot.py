@@ -288,7 +288,6 @@ def main():
             for logfile in ['prec1','prec5','loss_log']:
                 localfn=os.path.join(args.exp,'log',logfile)
                 response = s3_client.upload_file(localfn,args.linearclassbucket,os.path.join(linearclassfn,'log',"%s_toplayer_epoch_%d"%(logfile,epoch)))
-                os.remove(localfn)
 
             if is_best:
                 # Save output to check 
@@ -297,9 +296,11 @@ def main():
                 for logfile in ['prec1','prec5','loss_log']:
                     localfn=os.path.join(args.exp,'log',logfile)
                     response = s3_client.upload_file(localfn,args.linearclassbucket,os.path.join(linearclassfn,'log',logfile))
-                    os.remove(localfn)
 
             # Tidy up
+            for logfile in ['prec1','prec5','loss_log']:
+                localfn=os.path.join(args.exp,'log',logfile)
+                os.remove(localfn)
             os.remove(savedmodelpth)
 
         if args.aoaval:
