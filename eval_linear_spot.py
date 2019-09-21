@@ -237,8 +237,6 @@ def main():
         prec1_log = Logger(os.path.join(exp_log, 'prec1'))
         prec5_log = Logger(os.path.join(exp_log, 'prec5'))
 
-        for epoch in range(args.epochs):
-            end = time.time()
 
 
         # If savedmodel already exists, load this 
@@ -250,9 +248,15 @@ def main():
             print('Loading saved decoder %s'%savedmodelpth)
             model_with_decoder=torch.load(savedmodelpth)
             reglog.load_state_dict(model_with_decoder['reglog_state_dict'])
+            lastepoch=model['epoch']+1
         except:
+            lastepoch=0
+            
+        for epoch in range(lastepoch,args.epochs):
+        # Top layer epochs
+            end = time.time()
             # train for one epoch
-            train(train_loader, model, reglog, criterion, optimizer, epoch)
+            train(train_loader, model, reglog, criterion, optimizer, nargs.epochs)
 
             # evaluate on validation set
             prec1, prec5, loss = validate(val_loader, model, reglog, criterion,target_remap=range(1000))
@@ -264,10 +268,7 @@ def main():
             # remember best prec@1 and save checkpoint
             is_best = prec1 > best_prec1
             best_prec1 = max(prec1, best_prec1)
-            if is_best:
-                filename = 'model_best.pth.tar'
-            else:
-                filename = 'checkpoint.pth.tar'
+            filename='model_toplayer_epoch_%d.pth.tar'%epoch
             
             modelfn=os.path.join(args.exp, filename)
 
@@ -286,8 +287,17 @@ def main():
             response = s3_client.upload_file(savedmodelpth,args.linearclassbucket,os.path.join(linearclassfn,filename))
             for logfile in ['prec1','prec5','loss_log']:
                 localfn=os.path.join(args.exp,'log',logfile)
-                response = s3_client.upload_file(localfn,args.linearclassbucket,os.path.join(linearclassfn,'log',logfile))
+                response = s3_client.upload_file(localfn,args.linearclassbucket,os.path.join(linearclassfn,'log',"%s_toplayer_epoch_%d"%(logfile,epoch)))
                 os.remove(localfn)
+
+            if is_best:
+                # Save output to check 
+                s3_client = boto3.client('s3')
+                response = s3_client.upload_file(savedmodelpth,args.linearclassbucket,os.path.join(linearclassfn,'model_best.pth.tar'))                
+                for logfile in ['prec1','prec5','loss_log']:
+                    localfn=os.path.join(args.exp,'log',logfile)
+                    response = s3_client.upload_file(localfn,args.linearclassbucket,os.path.join(linearclassfn,'log',logfile))
+                    os.remove(localfn)
 
             # Tidy up
             os.remove(savedmodelpth)

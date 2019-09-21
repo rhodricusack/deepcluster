@@ -3,7 +3,7 @@ LINEARCLASSBUCKET="neurana-imaging"
 LINEARCLASSPATH="rhodricusack/deepcluster_analysis/linearclass_v2/"
 
 for ((conv=5;conv>0; conv--)); do
-  for ((tp=60;tp>=0;tp-=10)); do
+  for ((tp=0;tp<70;tp+=20)); do
       gotfile=$(aws s3 ls "s3://${LINEARCLASSBUCKET}/${LINEARCLASSPATH}linearclass_time_${tp}_conv_${conv}/model_best.pth.tar")
       if [ -z "$gotfile" ]; then
             echo "Nothing found for time $tp conv $conv";
