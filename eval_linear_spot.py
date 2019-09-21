@@ -256,7 +256,7 @@ def main():
         # Top layer epochs
             end = time.time()
             # train for one epoch
-            train(train_loader, model, reglog, criterion, optimizer, nargs.epochs)
+            train(train_loader, model, reglog, criterion, optimizer, epoch)
 
             # evaluate on validation set
             prec1, prec5, loss = validate(val_loader, model, reglog, criterion,target_remap=range(1000))

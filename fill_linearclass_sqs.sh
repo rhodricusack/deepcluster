@@ -1,6 +1,6 @@
 #!/bin/bash
 LINEARCLASSBUCKET="neurana-imaging"
-LINEARCLASSPATH="rhodricusack/deepcluster_analysis/linearclass_v2/"
+LINEARCLASSPATH="rhodricusack/deepcluster_analysis/linearclass_v3/"
 
 for ((conv=5;conv>0; conv--)); do
   for ((tp=0;tp<70;tp+=20)); do

@@ -43,12 +43,12 @@ if [ $VOLUME_ID ]; then
 #		sudo -H -u ubuntu bash -c "source /home/ubuntu/anaconda3/bin/activate pytorch_p27; conda install faiss-gpu cudatoolkit=10.0 -c pytorch --yes"
 # Not needed for training
         # Make some disc space
-		cd ~/anaconda3/envs
-		rm -rf amazonei* tensorflow* cntk* mxnet* caffe* &
+		cd /home/ubuntu/anaconda3/envs
+		rm -rf amazonei* tensorflow* cntk* mxnet* caffe* chainer* theano* &
         
 
 		# Initiate training using the tensorflow_36 conda environment
-		sudo -H -u ubuntu bash -c "./eval_linear_spot.sh"
+		sudo -H -u ubuntu bash -c "cd /home/ubuntu/deepcluster; ./eval_linear_spot.sh"
 fi
 
 # After training, clean up by cancelling spot requests and terminating itself
