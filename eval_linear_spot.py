@@ -408,9 +408,6 @@ def train(train_loader, model, reglog, criterion, optimizer, epoch):
 
     end = time.time()
     for i, (input, target) in enumerate(train_loader):
-
-        if i>300:
-            break
         # measure data loading time
         data_time.update(time.time() - end)
 
