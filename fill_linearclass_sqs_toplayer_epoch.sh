@@ -3,7 +3,7 @@ LINEARCLASSBUCKET="neurana-imaging"
 LINEARCLASSPATH="rhodricusack/deepcluster_analysis/linearclass_v3/"
 
 for ((conv=5;conv>0; conv--)); do
-  for ((tp=0;tp<10;tp+=20)); do
+  for ((tp=0;tp<70;tp+=20)); do
       aoapth="s3://${LINEARCLASSBUCKET}/${LINEARCLASSPATH}linearclass_time_${tp}_conv_${conv}/aoaresults_toplayer_epoch_1.json"
       gotfile=$(aws s3 ls "$aoapth")
       if [ -z "$gotfile" ]; then

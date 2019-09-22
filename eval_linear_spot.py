@@ -332,7 +332,7 @@ def main():
                 
 
             # Save to JSON
-            aoaresultsfn='aoaresults_toplayer_epoch_%d.json'%epoch
+            aoaresultsfn='aoaresults_toplayer_epoch_%d.json'%(args.epochs-1)
             aoapth=os.path.join(args.exp, aoaresultsfn)
             with open(aoapth,'w') as f:
                 json.dump(aoares,f)
