@@ -10,7 +10,7 @@ import matplotlib
 
 df=pd.DataFrame(columns=['stage','conv','toplayer_epoch','prec1','prec5','loss_log'])
 
-for stage in range(0,70,10):
+for stage in range(0,70,20):
     for conv in range(1,6,1):
         for toplayer_epoch in range(5):
             d={'stage':[stage],'conv':[conv],'toplayer_epoch':[toplayer_epoch]}
@@ -33,9 +33,15 @@ print(df)
 
 
 #%%
-fig,ax=plt.subplots()
-for trainkey,traingrp in df.groupby(['stage','conv']):
-    print(traingrp)
-    ax.plot(traingrp['toplayer_epoch'],traingrp['prec5'],label="%d-%d"%trainkey)
+fig,ax=plt.subplots(ncols=4,sharey=True,sharex=True)
+for epochkey,epochgrp in df.groupby('stage'):
+    for trainkey,traingrp in epochgrp.groupby('conv'):
+        print(traingrp)
+        print(epochkey)
+        if epochkey % 20==0:
+            ax[int(epochkey/20)].plot(1+traingrp['toplayer_epoch'],traingrp['prec5'],label="%d"%trainkey)
+    ax[int(epochkey/20)].set_xlim([1,5])
+    ax[int(epochkey/20)].set_xlabel('Epochs of top layer training')
+    ax[int(epochkey/20)].set_ylabel('Top-5 precision')
+    ax[int(epochkey/20)].set_title('Conv epochs %d'%epochkey)
 plt.legend()
-#%%
