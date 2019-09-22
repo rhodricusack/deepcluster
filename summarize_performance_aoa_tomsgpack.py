@@ -11,7 +11,7 @@ import matplotlib
 df_aoa=pd.DataFrame()
 
 
-for stage in [0,60]:
+for stage in range(70):
     for conv in range(1,6,1):
         lcpth='/home/ubuntu/linearclass_v3/linearclass_time_%d_conv_%d'%(stage,conv)
         print('Loading %s'%lcpth)
