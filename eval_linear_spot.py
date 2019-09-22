@@ -62,6 +62,7 @@ parser.add_argument('--weight_decay', '--wd', default=-4, type=float,
                     help='weight decay pow (default: -4)')
 parser.add_argument('--seed', type=int, default=31, help='random seed')
 parser.add_argument('--verbose', default=True, action='store_true', help='chatty')
+parser.add_argument('--toplayer_epoch', type=int, default=None, help='top layer epoch to load up (default: None)')
 
 
 def main():
@@ -240,8 +241,13 @@ def main():
 
 
         # If savedmodel already exists, load this 
-        print("Looking for saved model")
-        savedmodelpth=os.path.join(args.exp, 'model_best.pth.tar')
+        print("Looking for saved decoder")
+        if args.toplayer_epoch:
+            filename="model_toplayer_epoch_%d.pth.tar"%args.toplayer_epoch
+        else:
+            filename='model_best.pth.tar'
+        savedmodelpth=os.path.join(args.exp,filename)
+
         s3_client = boto3.client('s3')
         try:
             response = s3_client.download_file(args.linearclassbucket,os.path.join(linearclassfn,filename),savedmodelpth)
@@ -251,7 +257,9 @@ def main():
             lastepoch=model['epoch']+1
         except:
             lastepoch=0
-            
+
+        print("Will run from epoch %d to epoch %d"%(lastepoch,args.epochs-1))
+
         for epoch in range(lastepoch,args.epochs):
         # Top layer epochs
             end = time.time()
@@ -324,10 +332,11 @@ def main():
                 
 
             # Save to JSON
-            aoapth=os.path.join(args.exp, 'aoaresults.json')
+            aoaresultsfn='aoaresults_toplayer_epoch_%d.json'%epoch
+            aoapth=os.path.join(args.exp, aoaresultsfn)
             with open(aoapth,'w') as f:
                 json.dump(aoares,f)
-            response = s3_client.upload_file(aoapth,args.linearclassbucket,os.path.join(linearclassfn,'aoaresults.json'))
+            response = s3_client.upload_file(aoapth,args.linearclassbucket,os.path.join(linearclassfn,aoaresultsfn))
             os.remove(aoapth)
 
 
