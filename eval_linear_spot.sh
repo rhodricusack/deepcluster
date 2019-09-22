@@ -27,5 +27,5 @@ NGPUS=4
 
 for ((tp=0;tp<NGPUS;tp++)); do 
     mkdir -p ${EXP}_${tp}
-    (CUDA_VISIBLE_DEVICES=${tp}; ${PYTHON}  eval_linear_spot.py --data ${DATA} --epochs 5 --lr 0.01 --wd -7 --verbose --exp ${EXP}_${tp} --workers 32  --checkpointbucket ${CHECKPOINTBUCKET} --checkpointpath ${CHECKPOINTPATH} --sqsurl ${SQSURL} --linearclassbucket ${LINEARCLASSBUCKET} --linearclasspath ${LINEARCLASSPATH} --aoaval --toplayer-epoch 1) &
+    (CUDA_VISIBLE_DEVICES=${tp}; ${PYTHON}  eval_linear_spot.py --data ${DATA} --epochs 2 --lr 0.01 --wd -7 --verbose --exp ${EXP}_${tp} --workers 32  --checkpointbucket ${CHECKPOINTBUCKET} --checkpointpath ${CHECKPOINTPATH} --sqsurl ${SQSURL} --linearclassbucket ${LINEARCLASSBUCKET} --linearclasspath ${LINEARCLASSPATH} --aoaval --toplayer-epoch 1) &
 done
