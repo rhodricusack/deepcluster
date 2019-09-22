@@ -254,7 +254,7 @@ def main():
             print('Loading saved decoder %s'%savedmodelpth)
             model_with_decoder=torch.load(savedmodelpth)
             reglog.load_state_dict(model_with_decoder['reglog_state_dict'])
-            lastepoch=model['epoch']+1
+            lastepoch=model_with_decoder['epoch']
         except:
             lastepoch=0
 
