@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 import json
 import matplotlib
 
-df=pd.read_json('../deepcluster_analysis/deepcluster_performance_summary.json')
+df=pd.read_json('linearclass_v3_aoa.json')
 df=df.sort_values(by='epoch')
 
 #%%
