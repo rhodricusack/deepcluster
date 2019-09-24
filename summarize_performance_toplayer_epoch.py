@@ -10,7 +10,7 @@ import matplotlib
 
 df=pd.DataFrame(columns=['stage','conv','toplayer_epoch','prec1','prec5','loss_log'])
 
-for stage in range(0,70,20):
+for stage in list(range(0,10,2))+list(range(20,70,20)):
     for conv in range(1,6,1):
         for toplayer_epoch in range(5):
             d={'stage':[stage],'conv':[conv],'toplayer_epoch':[toplayer_epoch]}

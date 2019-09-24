@@ -11,11 +11,11 @@ import matplotlib
 df_aoa=pd.DataFrame()
 
 
-for stage in range(70):
+for stage in list(range(0,10,2))+list(range(20,70,20)):
     for conv in range(1,6,1):
         lcpth='/home/ubuntu/linearclass_v3/linearclass_time_%d_conv_%d'%(stage,conv)
         print('Loading %s'%lcpth)
-        aoapth=path.join(lcpth,'aoaresults.json')  
+        aoapth=path.join(lcpth,'aoaresults_toplayer_epoch_1.json')  
         if os.path.exists(aoapth):
             print('Found %s'%aoapth)
             with open(aoapth,'r') as f:
