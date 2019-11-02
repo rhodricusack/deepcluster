@@ -350,7 +350,7 @@ def train(train_loader, model, reglog, criterion, optimizer, epoch):
         #adjust learning rate
         learning_rate_decay(optimizer, len(train_loader) * epoch + i, args.lr)
 
-        target = target.cuda(async=True)
+        target = target.cuda(non_blocking=True)
         input_var = torch.autograd.Variable(input.cuda())
         target_var = torch.autograd.Variable(target)
         # compute output
