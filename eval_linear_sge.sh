@@ -8,25 +8,6 @@
 
 # ARGUMENTS
 
-while [ $# -gt 0 ]; do
-  case "$1" in
-    --TIMEPOINT=*)
-      TIMEPOINT="${1#*=}"
-      ;;
-    --CONV=*)
-      CONV="${1#*=}"
-      ;;
-    *)
-      printf "***************************\n"
-      printf "* Error: Invalid argument.*\n"
-      echo $1
-      printf "***************************\n"
-      exit 1
-  esac
-  shift
-done
-
-
 DATA="/fsx/rhodricusack/imagenet"
 PYTHON="~/python"
 MODEL="/fsx/rhodricusack/deepcluster_analysis/checkpoints_2019-09-11/checkpoints/checkpoint_0.pth.tar"
