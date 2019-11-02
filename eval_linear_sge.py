@@ -73,11 +73,11 @@ def main():
 
         best_prec1 = 0
         # Get model 
-        checkpointfn=os.path.join(args.model,"checkpoint_%d.pth.tar"%(args.checkpointepoch))
+        checkpointfn=os.path.join(args.model,"checkpoint_%d.pth.tar"%(args.checkpoint_epoch))
         conv=args.conv
 
         # Prepare place for output    
-        linearclasspth=os.path.join(args.exp,"linearclass_time_%d_conv_%d"%(args.checkpointepoch,conv))
+        linearclasspth=os.path.join(args.exp,"linearclass_time_%d_conv_%d"%(args.checkpoint_epoch,conv))
 
         # load model
         model = load_model(checkpointfn)
