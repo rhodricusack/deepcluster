@@ -8,17 +8,20 @@ import matplotlib.pyplot as plt
 import json
 import matplotlib
 
-df=pd.read_json('linearclass_v3_aoa.json')
+df=pd.read_json('../deepcluster_analysis/deepcluster_performance_summary.json')
+
 df=df.sort_values(by='epoch')
 
 #%%
-plt.figure()
-fig,ax=plt.subplots()
+fig,ax=plt.subplots(figsize=(4,4))
 for key, grp in df.groupby(['conv']):
     grp.plot(ax=ax,kind='line', x='epoch', y='prec5',  label=key)
 ax.set_xlabel('epoch')
 ax.set_ylabel('prec5 (validation)')
-
+ax.set_xlim([0,25])
+fig.savefig('deepcluster_prec5byepoch.pdf')
+ax.set_xlim([0,70])
+fig.savefig('deepcluster_prec5byepoch_widerange.pdf')
 #%%
 
 df_prec5_wide=df.pivot(index='epoch',columns='conv',values='prec5')
@@ -58,33 +61,20 @@ ax.set_zlabel('prec5')
 ax.set_zlim3d(0, 50)
 
 #%%
-plt.figure()
-fig,ax=plt.subplots()
+fig,ax=plt.subplots(figsize=(4,4))
 for key, grp in df.groupby(['conv']):
     grp.plot(ax=ax,kind='line', x='epoch', y='loss_log',  label=key)
 ax.set_ylim([0,7])
+ax.set_xlim([0,25])
 ax.set_xlabel('epoch')
 ax.set_ylabel('loss (validation)')
+fig.savefig('deepcluster_lossbyepoch.pdf')
+
+ax.set_xlim([0,70])
+fig.savefig('deepcluster_lossbyepoch_widerange.pdf')
 
 plt.show()
 
-
-plt.show()
-
-
-#%%
-from scipy.stats import pearsonr
-
-fig,ax=plt.subplots()
-for key, grp in df_aoa.groupby(['epoch']):
-    lossbylayer={}
-    plt.figure()
-    for nodekey, nodegrp in grp.groupby(['node']):
-        nodegrp.plot(ax=ax,x='conv', y='loss')
-ax.set_xlabel('conv')
-ax.set_ylim([0,10])
-ax.set_ylabel('loss (validation)')
-plt.show()
 
 
             

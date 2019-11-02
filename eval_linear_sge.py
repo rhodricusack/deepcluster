@@ -40,13 +40,12 @@ parser.add_argument('--model', type=str,default='/fsx/rhodricusack/deepcluster_a
 parser.add_argument('--conv', type=int, choices=[1, 2, 3, 4, 5],
                     help='on top of which convolutional layer train logistic regression')
 
-parser.add_argument('--linearclasspath', type=str, default='/fsx/rhodricusack/deepcluster_analysis/linearclass/', help='path to linearclass')
+parser.add_argument('--exp', type=str, default='/fsx/rhodricusack/deepcluster_analysis/linearclass_v3/', help='path to linearclass')
 
 parser.add_argument('--tencrops', action='store_true',
                     help='validation accuracy averaged over 10 crops')
 parser.add_argument('--aoaval', default=True, action='store_true',
                     help='age of acquisition style validation')
-parser.add_argument('--exp', type=str, default='/home/ubuntu/linearclass_test', help='exp folder')
 parser.add_argument('--workers', default=32, type=int,
                     help='number of data loading workers (default: 8)')
 parser.add_argument('--epochs', type=int, default=2, help='number of total epochs to run (default: 90)')
@@ -78,8 +77,7 @@ def main():
         conv=args.conv
 
         # Prepare place for output    
-        linearclassfn=os.path.join(args.linearclasspath,"linearclass_time_%d_conv_%d"%(args.epoch,conv))
-        print("Will write output to bucket %s, %s",args.linearclassbucket,linearclassfn)
+        linearclasspth=os.path.join(args.exp,"linearclass_time_%d_conv_%d"%(args.epoch,conv))
 
         # load model
         model = load_model(checkpointfn)
@@ -184,7 +182,7 @@ def main():
         )
 
         # create logs
-        exp_log = os.path.join(args.exp, 'log')
+        exp_log = os.path.join(args.linearclasspth, 'log')
         if not os.path.isdir(exp_log):
             os.makedirs(exp_log)
 
@@ -200,7 +198,7 @@ def main():
             filename="model_toplayer_epoch_%d.pth.tar"%args.toplayer_epoch
         else:
             filename='model_best.pth.tar'
-        savedmodelpth=os.path.join(args.exp,filename)
+        savedmodelpth=os.path.join(args.linearclasspth,filename)
 
         try:
             print('Loading saved decoder %s'%savedmodelpth)
@@ -230,7 +228,7 @@ def main():
             best_prec1 = max(prec1, best_prec1)
             filename='model_toplayer_epoch_%d.pth.tar'%epoch
             
-            modelfn=os.path.join(args.exp, filename)
+            modelfn=os.path.join(args.linearclasspth, filename)
 
             torch.save({
                 'epoch': epoch + 1,
@@ -264,7 +262,7 @@ def main():
 
             # Save to JSON
             aoaresultsfn='aoaresults_toplayer_epoch_%d.json'%(args.epochs-1)
-            aoapth=os.path.join(args.exp, aoaresultsfn)
+            aoapth=os.path.join(args.linearclasspth, aoaresultsfn)
             with open(aoapth,'w') as f:
                 json.dump(aoares,f)
 

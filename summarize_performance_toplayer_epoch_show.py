@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 import json
 import matplotlib
 
-df=pd.read_json('linearclass_v3_toplayer_epoch.json')
+df=pd.read_json('../deepcluster_analysis/linearclass_v3_toplayer_epoch.json')
 
 fig,ax=plt.subplots(ncols=4,sharey=True,sharex=True)
 for epochkey,epochgrp in df.groupby('stage'):
@@ -20,5 +20,7 @@ for epochkey,epochgrp in df.groupby('stage'):
     ax[int(epochkey/20)].set_ylabel('Top-5 precision')
     ax[int(epochkey/20)].set_title('Conv epochs %d'%epochkey)
 plt.legend()
+
+fig.savefig('deepcluster_toplayer_epochs.pdf')
 
 plt.show()
