@@ -10,11 +10,11 @@
 
 DATA="/fsx/rhodricusack/imagenet"
 PYTHON="~/python"
-MODEL="/fsx/rhodricusack/deepcluster_analysis/checkpoints_2019-09-11/checkpoints/checkpoint_0.pth.tar"
+MODEL="/fsx/rhodricusack/deepcluster_analysis/checkpoints_2019-09-11/checkpoints"
 EXP="/fsx/rhodricusack/deepcluster_analysis/linearclass_v3/"
 
 echo "CONV is $CONV"
 echo "TIMEPOINT is $TIMEPOINT"
 
 ~/anaconda3/bin/conda init
-~/anaconda3/bin/python ~/deepcluster/eval_linear_sge.py --data ${DATA} --epochs 2 --lr 0.01 --wd -7 --verbose --exp ${EXP}_${TIMEPOINT} --workers 8  --model ${MODEL}  --aoaval --toplayer_epoch 5 --conv ${CONV} 
+~/anaconda3/bin/python ~/deepcluster/eval_linear_sge.py --data ${DATA} --epochs 2 --checkpoint_epoch $TIMEPOINT --lr 0.01 --wd -7 --verbose --exp ${EXP}_${TIMEPOINT} --workers 8  --model ${MODEL}  --aoaval --toplayer_epoch 5 --conv ${CONV} 

@@ -36,7 +36,8 @@ parser = argparse.ArgumentParser(description="""Train linear classifier on top
 
 parser.add_argument('--data', type=str, default='/fsx/rhodricusack/imagenet',help='path to dataset')
 # This stuff will be pulled from parameters pulled from SQS 
-parser.add_argument('--model', type=str,default='/fsx/rhodricusack/deepcluster_analysis/checkpoints_2019-09-11/checkpoints/checkpoint_0.pth.tar', help='path to model')
+parser.add_argument('--model', type=str,default='/fsx/rhodricusack/deepcluster_analysis/checkpoints_2019-09-11/checkpoints', help='path to model')
+parser.add_argument('--checkpoint_epoch', type=int,default=0, help='Epoch of checkpoint to load up')
 parser.add_argument('--conv', type=int, choices=[1, 2, 3, 4, 5],
                     help='on top of which convolutional layer train logistic regression')
 
@@ -71,13 +72,12 @@ def main():
         np.random.seed(args.seed)
 
         best_prec1 = 0
-
-        # Get model and conv
-        checkpointfn=args.model
+        # Get model 
+        checkpointfn=os.path.join(args.model,"checkpoint_%d.pth.tar"%(args.checkpointepoch))
         conv=args.conv
 
         # Prepare place for output    
-        linearclasspth=os.path.join(args.exp,"linearclass_time_%d_conv_%d"%(args.epoch,conv))
+        linearclasspth=os.path.join(args.exp,"linearclass_time_%d_conv_%d"%(args.checkpointepoch,conv))
 
         # load model
         model = load_model(checkpointfn)
