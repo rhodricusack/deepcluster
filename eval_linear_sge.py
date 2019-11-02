@@ -403,7 +403,7 @@ def validate(val_loader, model, reglog, criterion, target_remap=None):
             input_tensor = input_tensor.view(-1, c, h, w)
         if target_remap:
             target=torch.tensor([target_remap[x] for x in target],dtype=torch.long)
-        target = target.cuda(async=True)
+        target = target.cuda(non_blocking=True)
         with torch.no_grad():
             input_var = torch.autograd.Variable(input_tensor.cuda())
             target_var = torch.autograd.Variable(target)
