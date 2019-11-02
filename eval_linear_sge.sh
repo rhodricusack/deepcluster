@@ -17,4 +17,5 @@ echo "CONV is $CONV"
 echo "TIMEPOINT is $TIMEPOINT"
 
 ~/anaconda3/bin/conda init
-~/anaconda3/bin/python ~/deepcluster/eval_linear_sge.py --data ${DATA} --epochs 2 --checkpoint_epoch $TIMEPOINT --lr 0.01 --wd -7 --verbose --exp ${EXP}_${TIMEPOINT} --workers 8  --model ${MODEL}  --aoaval --toplayer_epoch 5 --conv ${CONV} 
+cd deepcluster
+~/anaconda3/bin/python eval_linear_sge.py --data ${DATA} --epochs 2 --checkpoint_epoch $TIMEPOINT --lr 0.01 --wd -7 --verbose --exp ${EXP}_${TIMEPOINT} --workers 8  --model ${MODEL}  --aoaval --toplayer_epoch 5 --conv ${CONV} 
