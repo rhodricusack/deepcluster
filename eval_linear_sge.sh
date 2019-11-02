@@ -17,5 +17,5 @@ echo "CONV is $CONV"
 echo "TIMEPOINT is $TIMEPOINT"
 
 ~/anaconda2/bin/conda init
-python eval_linear_spot.py --data ${DATA} --epochs 2 --lr 0.01 --wd -7 --verbose --exp ${EXP}_${TIMEPOINT} --workers 8  \\
+python ~/deepcluster/eval_linear_spot.py --data ${DATA} --epochs 2 --lr 0.01 --wd -7 --verbose --exp ${EXP}_${TIMEPOINT} --workers 8  \\
             --model ${MODEL}  --aoaval --toplayer_epoch 5 --conv ${CONV} &  
