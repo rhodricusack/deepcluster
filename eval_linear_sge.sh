@@ -8,10 +8,10 @@
 
 # ARGUMENTS
 
-DATA="/fsx/rhodricusack/imagenet"
+DATA="/fsx/iclr2020/imagenet"
 PYTHON="~/python"
-MODEL="/fsx/rhodricusack/deepcluster_analysis/checkpoints_2019-09-11/checkpoints"
-EXP="/fsx/rhodricusack/deepcluster_analysis/linearclass_v3/"
+MODEL="/fsx/iclr2020/deepcluster_analysis/checkpoints_2019-09-11/checkpoints"
+EXP="/fsx/iclr2020/deepcluster_analysis/linearclass_v3/"
 
 echo "CONV is $CONV"
 echo "TIMEPOINT is $TIMEPOINT"
