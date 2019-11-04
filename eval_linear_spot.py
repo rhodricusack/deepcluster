@@ -28,6 +28,7 @@ from util import AverageMeter, learning_rate_decay, load_model, Logger
 
 import pandas as pd
 
+import tempfile
 import multiprocessing
 multiprocessing.set_start_method('spawn', True)
 
@@ -66,6 +67,10 @@ def main():
     global args
     args = parser.parse_args()
 
+    # Temporary directory used for downloaded models etc
+    tmppth=tempfile.mkdtemp
+    print('Using temporary directory %s'%tmppth)
+
     while True:
         #fix random seeds
         torch.manual_seed(args.seed)
@@ -73,6 +78,10 @@ def main():
         np.random.seed(args.seed)
 
         best_prec1 = 0
+
+        # Checkpoint to be loaded from disc
+        checkpointbasename='checkpoint_%d.pth.tar'%args.timepoint
+        checkpointfn=os.path.join(tmppth,checkpointbasename)
 
         # Pull model from S3
         s3 = boto3.resource('s3')
@@ -90,9 +99,7 @@ def main():
         linearclassfn=os.path.join(args.linearclasspath,"linearclass_time_%d_conv_%d"%(args.timepoint,args.conv))
         print("Will write output to bucket %s, %s",args.linearclassbucket,linearclassfn)
 
-        # Checkpoint to be loaded from disc
-        checkpointbasename='checkpoint_%d.pth.tar'%args.timepoint
-        checkpointfn=os.path.join(args.exp,checkpointbasename)
+        # Load model
         model = load_model(checkpointfn)
         model.cuda()
         cudnn.benchmark = True
@@ -198,7 +205,7 @@ def main():
         )
 
         # create logs
-        exp_log = os.path.join(args.exp, 'log')
+        exp_log = os.path.join(tmppth, 'log')
         if not os.path.isdir(exp_log):
             os.makedirs(exp_log)
 
@@ -214,7 +221,7 @@ def main():
             filename="model_toplayer_epoch_%d.pth.tar"%args.toplayer_epoch
         else:
             filename='model_best.pth.tar'
-        savedmodelpth=os.path.join(args.exp,filename)
+        savedmodelpth=os.path.join(tmppth,filename)
 
         s3_client = boto3.client('s3')
         try:
@@ -246,7 +253,7 @@ def main():
             best_prec1 = max(prec1, best_prec1)
             filename='model_toplayer_epoch_%d.pth.tar'%epoch
             
-            modelfn=os.path.join(args.exp, filename)
+            modelfn=os.path.join(tmppth, filename)
 
             torch.save({
                 'epoch': epoch + 1,
@@ -262,7 +269,7 @@ def main():
             s3_client = boto3.client('s3')
             response = s3_client.upload_file(savedmodelpth,args.linearclassbucket,os.path.join(linearclassfn,filename))
             for logfile in ['prec1','prec5','loss_log']:
-                localfn=os.path.join(args.exp,'log',logfile)
+                localfn=os.path.join(tmppth,'log',logfile)
                 response = s3_client.upload_file(localfn,args.linearclassbucket,os.path.join(linearclassfn,'log',"%s_toplayer_epoch_%d"%(logfile,epoch)))
 
             if is_best:
@@ -270,12 +277,12 @@ def main():
                 s3_client = boto3.client('s3')
                 response = s3_client.upload_file(savedmodelpth,args.linearclassbucket,os.path.join(linearclassfn,'model_best.pth.tar'))                
                 for logfile in ['prec1','prec5','loss_log']:
-                    localfn=os.path.join(args.exp,'log',logfile)
+                    localfn=os.path.join(tmppth,'log',logfile)
                     response = s3_client.upload_file(localfn,args.linearclassbucket,os.path.join(linearclassfn,'log',logfile))
 
             # Tidy up
             for logfile in ['prec1','prec5','loss_log']:
-                localfn=os.path.join(args.exp,'log',logfile)
+                localfn=os.path.join(tmppth,'log',logfile)
                 os.remove(localfn)
             os.remove(savedmodelpth)
 
@@ -301,11 +308,15 @@ def main():
 
             # Save to JSON
             aoaresultsfn='aoaresults_toplayer_epoch_%d.json'%(args.epochs-1)
-            aoapth=os.path.join(args.exp, aoaresultsfn)
+            aoapth=os.path.join(tmppth, aoaresultsfn)
             with open(aoapth,'w') as f:
                 json.dump(aoares,f)
             response = s3_client.upload_file(aoapth,args.linearclassbucket,os.path.join(linearclassfn,aoaresultsfn))
             os.remove(aoapth)
+
+        # Clean up temporary directories
+        os.makedirs(exp_log)
+        os.rmdir(tmppth)
 
 
 def is_number(s):
