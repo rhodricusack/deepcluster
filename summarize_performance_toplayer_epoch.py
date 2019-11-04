@@ -14,6 +14,8 @@ import botocore
 from pathlib import Path
 
 home = str(Path.home())
+# To download logs from S3
+s3 = boto3.resource('s3')
 
 df=pd.DataFrame(columns=['stage','conv','toplayer_epoch','prec1','prec5','loss_log'])
 
