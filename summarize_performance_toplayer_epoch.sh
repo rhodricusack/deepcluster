@@ -1,2 +1,2 @@
 cd deepcluster 
-python summarize_performance_toplayer_epoch.python
+python summarize_performance_toplayer_epoch.py
