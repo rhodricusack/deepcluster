@@ -42,7 +42,7 @@ with open('notfound.csv','w') as notfoundf:
                     print("Attempting s3 download from %s"%s3fn )
                     s3.Bucket('neurana-imaging').download_file(s3fn,localfn)
                 except botocore.exceptions.ClientError as e:
-                    if e.response['Error']['Code'] == "404":
+                    if e.response['Error']['Code'] == "404" or e.response['Error']['Code'] == "403" :
                         print("The object does not exist.")
                         notfoundf.write('%d\t%d\n'%(stage,conv))
                     else:
