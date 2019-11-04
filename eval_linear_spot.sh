@@ -16,4 +16,4 @@ LINEARCLASSBUCKET="neurana-imaging"
 LINEARCLASSPATH="rhodricusack/deepcluster_analysis/linearclass_v3/"
 
 mkdir -p ${EXP}_${TIMEPOINT}
-${PYTHON}  eval_linear_spot.py --data ${DATA} --epochs 2 --lr 0.01 --wd -7 --verbose --workers 4 --conv ${CONV} --timepoint ${TIMEPOINT}  --checkpointbucket ${CHECKPOINTBUCKET} --checkpointpath ${CHECKPOINTPATH} --sqsurl ${SQSURL} --linearclassbucket ${LINEARCLASSBUCKET} --linearclasspath ${LINEARCLASSPATH} --aoaval --toplayer_epoch 1) &
+${PYTHON}  eval_linear_spot.py --data ${DATA} --epochs 2 --lr 0.01 --wd -7 --verbose --workers 4 --conv ${CONV} --timepoint ${TIMEPOINT}  --checkpointbucket ${CHECKPOINTBUCKET} --checkpointpath ${CHECKPOINTPATH} --sqsurl ${SQSURL} --linearclassbucket ${LINEARCLASSBUCKET} --linearclasspath ${LINEARCLASSPATH} --aoaval --toplayer_epoch ${TOPLAYER_EPOCH}) &
