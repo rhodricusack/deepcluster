@@ -18,5 +18,5 @@ LINEARCLASSPATH="rhodricusack/iclr2020/deepcluster_analysis/linearclass_v3/"
 mkdir -p ${EXP}_${TIMEPOINT}
 
 cd deepcluster
-${PYTHON}  eval_linear_spot.py --data ${DATA} --lr 0.01 --wd -7 --verbose --workers 4 --conv ${CONV} --timepoint ${TIMEPOINT}  --checkpointbucket ${CHECKPOINTBUCKET} --checkpointpath ${CHECKPOINTPATH} --linearclassbucket ${LINEARCLASSBUCKET} --linearclasspath ${LINEARCLASSPATH} --aoaval --toplayer_epochs ${TOPLAYER_EPOCH}
+${PYTHON}  eval_linear_spot.py --data ${DATA} --lr 0.01 --wd -7 --verbose --workers 4 --conv ${CONV} --timepoint ${TIMEPOINT}  --checkpointbucket ${CHECKPOINTBUCKET} --checkpointpath ${CHECKPOINTPATH} --linearclassbucket ${LINEARCLASSBUCKET} --linearclasspath ${LINEARCLASSPATH} --aoaval --toplayer_epochs ${TOPLAYER_EPOCHS}
 
