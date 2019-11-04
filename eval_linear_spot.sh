@@ -11,9 +11,9 @@ DATA="/imagenet"
 PYTHON="../anaconda3/bin/python"
 
 CHECKPOINTBUCKET="neurana-imaging"
-CHECKPOINTPATH="rhodricusack/deepcluster_analysis/checkpoints_2019-09-11/checkpoints"
+CHECKPOINTPATH="rhodricusack/iclr2020/deepcluster_analysis/checkpoints_2019-09-11/checkpoints"
 LINEARCLASSBUCKET="neurana-imaging"
-LINEARCLASSPATH="rhodricusack/deepcluster_analysis/linearclass_v3/"
+LINEARCLASSPATH="rhodricusack/iclr2020/deepcluster_analysis/linearclass_v3/"
 
 mkdir -p ${EXP}_${TIMEPOINT}
 
