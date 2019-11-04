@@ -35,13 +35,11 @@ parser = argparse.ArgumentParser(description="""Train linear classifier on top
                                  of frozen convolutional layers of an AlexNet.""")
 
 parser.add_argument('--data', type=str, default='/imagenet',help='path to dataset')
-# This stuff will be pulled from parameters pulled from SQS 
-#parser.add_argument('--model', type=str, help='path to model')
-#parser.add_argument('--conv', type=int, choices=[1, 2, 3, 4, 5],
-#                    help='on top of which convolutional layer train logistic regression')
+parser.add_argument('--timepoint', type=int, help='timepoint for checkpoint to be loaded')
+parser.add_argument('--conv', type=int, choices=[1, 2, 3, 4, 5],
+                    help='on top of which convolutional layer train logistic regression')
 parser.add_argument('--checkpointbucket', type=str, default='neurana-imaging', help='bucket for checkpoint')
 parser.add_argument('--checkpointpath', type=str, default='rhodricusack/deepcluster_analysis/checkpoints_2019-09-11/checkpoints', help='prefix on s3 for checkpoints')
-parser.add_argument('--sqsurl', type=str, default='https://sqs.eu-west-1.amazonaws.com/807820536621/deepcluster-linearclass.fifo', help='SQS URL for task')
 
 parser.add_argument('--linearclassbucket', type=str, default='neurana-imaging', help='bucket for linearclass')
 parser.add_argument('--linearclasspath', type=str, default='rhodricusack/deepcluster_analysis/linearclass/', help='prefix on s3 for linearclass')
@@ -50,7 +48,6 @@ parser.add_argument('--tencrops', action='store_true',
                     help='validation accuracy averaged over 10 crops')
 parser.add_argument('--aoaval', default=True, action='store_true',
                     help='age of acquisition style validation')
-parser.add_argument('--exp', type=str, default='/home/ubuntu/linearclass_test', help='exp folder')
 parser.add_argument('--workers', default=32, type=int,
                     help='number of data loading workers (default: 8)')
 parser.add_argument('--epochs', type=int, default=2, help='number of total epochs to run (default: 90)')
@@ -77,37 +74,6 @@ def main():
 
         best_prec1 = 0
 
-        # identify task
-        client = boto3.client('sqs',region_name='eu-west-1')
-
-        # Retry for a minute
-        for retry in range(60):
-            sqsreceive = client.receive_message(
-                QueueUrl=args.sqsurl, MaxNumberOfMessages=1
-            )
-            if 'Messages' in sqsreceive.keys():
-                break
-            time.sleep(1.0)
-            print('Retrying queue %s'%args.sqsurl)
-        
-
-        if not 'Messages' in sqsreceive.keys():
-            print('No SQS found, bailing')
-            return
-
-        
-        print('Received SQS:\n%s'%sqsreceive)
-
-
-        # Parse message into model and conv
-        msgbody=json.loads(sqsreceive['Messages'][0]['Body'])
-        checkpointbasename='checkpoint_%d.pth.tar'%msgbody['epoch']
-        checkpointfn=os.path.join(args.exp,checkpointbasename)
-        conv=msgbody['conv']
-
-        # Get rid of the message from the queue if we've got this far
-        client.delete_message(ReceiptHandle=sqsreceive['Messages'][0]['ReceiptHandle'],QueueUrl=args.sqsurl)
-
         # Pull model from S3
         s3 = boto3.resource('s3')
         try:
@@ -121,10 +87,12 @@ def main():
                 raise
 
         # Prepare place for output    
-        linearclassfn=os.path.join(args.linearclasspath,"linearclass_time_%d_conv_%d"%(msgbody['epoch'],conv))
+        linearclassfn=os.path.join(args.linearclasspath,"linearclass_time_%d_conv_%d"%(args.timepoint,args.conv))
         print("Will write output to bucket %s, %s",args.linearclassbucket,linearclassfn)
 
-        # load model
+        # Checkpoint to be loaded from disc
+        checkpointbasename='checkpoint_%d.pth.tar'%args.timepoint
+        checkpointfn=os.path.join(args.exp,checkpointbasename)
         model = load_model(checkpointfn)
         model.cuda()
         cudnn.benchmark = True
@@ -221,7 +189,7 @@ def main():
         # logistic regression
         print("Setting up regression")
 
-        reglog = RegLog(conv, len(train_dataset.classes)).cuda()
+        reglog = RegLog(args.conv, len(train_dataset.classes)).cuda()
         optimizer = torch.optim.SGD(
             filter(lambda x: x.requires_grad, reglog.parameters()),
             args.lr,
@@ -476,7 +444,7 @@ def validate(val_loader, model, reglog, criterion, target_remap=None):
             input_tensor = input_tensor.view(-1, c, h, w)
         if target_remap:
             target=torch.tensor([target_remap[x] for x in target],dtype=torch.long)
-        target = target.cuda(async=True)
+        target = target.cuda(not_blocking=True)
         with torch.no_grad():
             input_var = torch.autograd.Variable(input_tensor.cuda())
             target_var = torch.autograd.Variable(target)
