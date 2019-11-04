@@ -217,7 +217,7 @@ def main():
         # If savedmodel already exists, load this 
         print("Looking for saved decoder")
         if args.toplayer_epochs-1:
-            filename="model_toplayer_epoch_%d.pth.tar"%args.toplayer_epochs-1
+            filename="model_toplayer_epoch_%d.pth.tar"%(args.toplayer_epochs-1)
         else:
             filename='model_best.pth.tar'
         savedmodelpth=os.path.join(tmppth,filename)
