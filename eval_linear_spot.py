@@ -51,7 +51,7 @@ parser.add_argument('--aoaval', default=True, action='store_true',
                     help='age of acquisition style validation')
 parser.add_argument('--workers', default=32, type=int,
                     help='number of data loading workers (default: 8)')
-parser.add_argument('--epochs', type=int, default=2, help='number of total epochs to run (default: 90)')
+parser.add_argument('--toplayer_epochs', type=int, default=2, help='number of toplayer epochs to run (default: 90)')
 parser.add_argument('--batch_size', default=256, type=int,
                     help='mini-batch size (default: 256)')
 parser.add_argument('--lr', default=0.01, type=float, help='learning rate')
@@ -60,7 +60,6 @@ parser.add_argument('--weight_decay', '--wd', default=-4, type=float,
                     help='weight decay pow (default: -4)')
 parser.add_argument('--seed', type=int, default=31, help='random seed')
 parser.add_argument('--verbose', default=True, action='store_true', help='chatty')
-parser.add_argument('--toplayer_epoch', type=int, default=None, help='top layer epoch to load up (default: None)')
 
 
 def main():
@@ -217,8 +216,8 @@ def main():
 
         # If savedmodel already exists, load this 
         print("Looking for saved decoder")
-        if args.toplayer_epoch:
-            filename="model_toplayer_epoch_%d.pth.tar"%args.toplayer_epoch
+        if args.toplayer_epochs-1:
+            filename="model_toplayer_epoch_%d.pth.tar"%args.toplayer_epochs-1
         else:
             filename='model_best.pth.tar'
         savedmodelpth=os.path.join(tmppth,filename)
@@ -233,9 +232,9 @@ def main():
         except:
             lastepoch=0
 
-        print("Will run from epoch %d to epoch %d"%(lastepoch,args.epochs-1))
+        print("Will run from epoch %d to epoch %d"%(lastepoch,args.toplayer_epochs-1))
 
-        for epoch in range(lastepoch,args.epochs):
+        for epoch in range(lastepoch,args.toplayer_epochs):
         # Top layer epochs
             end = time.time()
             # train for one epoch
@@ -307,7 +306,7 @@ def main():
                 
 
             # Save to JSON
-            aoaresultsfn='aoaresults_toplayer_epoch_%d.json'%(args.epochs-1)
+            aoaresultsfn='aoaresults_toplayer_epoch_%d.json'%(args.toplayer_epochs-1)
             aoapth=os.path.join(tmppth, aoaresultsfn)
             with open(aoapth,'w') as f:
                 json.dump(aoares,f)
