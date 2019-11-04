@@ -8,6 +8,11 @@ import matplotlib.pyplot as plt
 import json
 import matplotlib
 
+import boto3
+import botocore
+
+from pathlib import Path
+
 df=pd.DataFrame(columns=['stage','conv','toplayer_epoch','prec1','prec5','loss_log'])
 
 lcpth='rhodricusack/iclr2020/deepcluster_analysis/linearclass_v3'
