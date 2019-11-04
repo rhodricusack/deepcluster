@@ -68,7 +68,7 @@ def main():
     args = parser.parse_args()
 
     # Temporary directory used for downloaded models etc
-    tmppth=tempfile.mkdtemp
+    tmppth=tempfile.mkdtemp()
     print('Using temporary directory %s'%tmppth)
 
     while True:
