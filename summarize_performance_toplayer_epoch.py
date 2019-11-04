@@ -27,8 +27,8 @@ with open('notfound_toplayer_epoch.csv','w') as notfoundf:
             for toplayer_epoch in range(5):
                 d={'stage':[stage],'conv':[conv],'toplayer_epoch':[toplayer_epoch]}
                 suffix="_toplayer_epoch_%d"%toplayer_epoch
-                lcpth2='linearclass_time_%d_conv_%d'%(stage,conv)
-                localpth=path.join(home,lcpth,lcpth2,'log')
+                lcpth2=os.path.join('linearclass_time_%d_conv_%d'%(stage,conv),'log')
+                localpth=path.join(home,lcpth,lcpth2)
                 # Make directory to download file to
                 if not path.exists(localpth):
                     os.makedirs(localpth)
