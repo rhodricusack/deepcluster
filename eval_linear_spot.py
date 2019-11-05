@@ -233,7 +233,7 @@ def main():
         except:
             try:
                 # Fallback to last saved toplayer_epoch, which we'll use as a starting point                
-                response = s3_client.download_file(args.linearclassbucket,os.path.join(linearclassfn,'model_best.pth.tar'),'savedmodelpth')
+                response = s3_client.download_file(args.linearclassbucket,os.path.join(linearclassfn,'model_best.pth.tar'),savedmodelpth)
                 print('Loading best-so-far saved decoder %s (s3:%s)'%(savedmodelpth,os.path.join(linearclassfn,'model_best.pth.tar')))
                 model_with_decoder=torch.load(savedmodelpth)
                 print('Previous model epoch %d'%model_with_decoder['epoch'])
@@ -329,7 +329,7 @@ def main():
             os.remove(aoapth)
 
         # Clean up temporary directories
-        os.makedirs(exp_log)
+        os.rmdir(exp_log)
         os.rmdir(tmppth)
 
 
