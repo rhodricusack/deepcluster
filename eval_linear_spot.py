@@ -216,7 +216,7 @@ def main():
 
         # If savedmodel already exists, load this 
         print("Looking for saved decoder")
-        if args.toplayer_epochs-1:
+        if args.toplayer_epochs:
             filename="model_toplayer_epoch_%d.pth.tar"%(args.toplayer_epochs-1)
         else:
             filename='model_best.pth.tar'
@@ -224,13 +224,26 @@ def main():
 
         s3_client = boto3.client('s3')
         try:
+            # Try to download desired toplayer_epoch
             response = s3_client.download_file(args.linearclassbucket,os.path.join(linearclassfn,filename),savedmodelpth)
             print('Loading saved decoder %s'%savedmodelpth)
             model_with_decoder=torch.load(savedmodelpth)
             reglog.load_state_dict(model_with_decoder['reglog_state_dict'])
             lastepoch=model_with_decoder['epoch']
         except:
-            lastepoch=0
+            try:
+                # Fallback to last saved toplayer_epoch, which we'll use as a starting point                
+                response = s3_client.download_file(args.linearclassbucket,os.path.join(linearclassfn,'model_best.pth.tar'),'savedmodelpth')
+                print('Loading saved decoder %s'%savedmodelpth)
+                model_with_decoder=torch.load(savedmodelpth)
+                # But check it isn't greater than desired stage before loading 
+                if model_with_decoder['epoch']<args.toplayer_epochs:
+                    lastepoch=model_with_decoder['epoch']
+                    reglog.load_state_dict(model_with_decoder['reglog_state_dict'])
+                else:
+                    lastepoch=0
+            except:
+                lastepoch=0
 
         print("Will run from epoch %d to epoch %d"%(lastepoch,args.toplayer_epochs-1))
 
@@ -454,7 +467,7 @@ def validate(val_loader, model, reglog, criterion, target_remap=None):
             input_tensor = input_tensor.view(-1, c, h, w)
         if target_remap:
             target=torch.tensor([target_remap[x] for x in target],dtype=torch.long)
-        target = target.cuda(not_blocking=True)
+        target = target.cuda(non_blocking=True)
         with torch.no_grad():
             input_var = torch.autograd.Variable(input_tensor.cuda())
             target_var = torch.autograd.Variable(target)
