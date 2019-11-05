@@ -226,7 +226,7 @@ def main():
         try:
             # Try to download desired toplayer_epoch
             response = s3_client.download_file(args.linearclassbucket,os.path.join(linearclassfn,filename),savedmodelpth)
-            print('Loading saved decoder %s'%savedmodelpth)
+            print('Loading saved decoder %s (s3: %s)'%(savedmodelpth,os.path.join(linearclassfn,filename)))
             model_with_decoder=torch.load(savedmodelpth)
             reglog.load_state_dict(model_with_decoder['reglog_state_dict'])
             lastepoch=model_with_decoder['epoch']
@@ -234,13 +234,14 @@ def main():
             try:
                 # Fallback to last saved toplayer_epoch, which we'll use as a starting point                
                 response = s3_client.download_file(args.linearclassbucket,os.path.join(linearclassfn,'model_best.pth.tar'),'savedmodelpth')
-                print('Loading saved decoder %s'%savedmodelpth)
+                print('Loading best-so-far saved decoder %s (s3:%s)'%(savedmodelpth,os.path.join(linearclassfn,'model_best.pth.tar')))
                 model_with_decoder=torch.load(savedmodelpth)
                 # But check it isn't greater than desired stage before loading 
                 if model_with_decoder['epoch']<=args.toplayer_epochs:
                     lastepoch=model_with_decoder['epoch']
                     reglog.load_state_dict(model_with_decoder['reglog_state_dict'])
                 else:
+                    print('Previous model epoch %d was past desired one %d'%(model_with_decoder['epoch'],args.toplayer_epochs))
                     lastepoch=0
             except:
                 lastepoch=0
