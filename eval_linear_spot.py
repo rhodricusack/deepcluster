@@ -237,7 +237,7 @@ def main():
                 print('Loading saved decoder %s'%savedmodelpth)
                 model_with_decoder=torch.load(savedmodelpth)
                 # But check it isn't greater than desired stage before loading 
-                if model_with_decoder['epoch']<args.toplayer_epochs:
+                if model_with_decoder['epoch']<=args.toplayer_epochs:
                     lastepoch=model_with_decoder['epoch']
                     reglog.load_state_dict(model_with_decoder['reglog_state_dict'])
                 else:
