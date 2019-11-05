@@ -58,7 +58,7 @@ with open('notfound_summarize_performance_v2.csv','w') as notfoundf:
                 if 'prec1' in d.keys():
                     df=df.append(pd.DataFrame.from_dict(d),ignore_index=True)
 
-df.to_json('linearclass_v3_toplayer_epoch.json')
+df.to_json('deepcluster_summarize_performance_v2.json')
 print(df)
 
 
