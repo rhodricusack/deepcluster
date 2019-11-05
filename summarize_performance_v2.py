@@ -22,7 +22,7 @@ df=pd.DataFrame(columns=['stage','conv','toplayer_epoch','prec1','prec5','loss_l
 lcpth='rhodricusack/iclr2020/deepcluster_analysis/linearclass_v3'
 
 with open('notfound_summarize_performance_v2.csv','w') as notfoundf:
-    for stage in range(0,80):
+    for stage in range(0,10,2)+range(10,80,10):
         for conv in range(1,6):
             for toplayer_epoch in [1]:
                 d={'stage':[stage],'conv':[conv],'toplayer_epoch':[toplayer_epoch]}
