@@ -70,267 +70,266 @@ def main():
     tmppth=tempfile.mkdtemp()
     print('Using temporary directory %s'%tmppth)
 
-    while True:
-        #fix random seeds
-        torch.manual_seed(args.seed)
-        torch.cuda.manual_seed_all(args.seed)
-        np.random.seed(args.seed)
+    #fix random seeds
+    torch.manual_seed(args.seed)
+    torch.cuda.manual_seed_all(args.seed)
+    np.random.seed(args.seed)
 
-        best_prec1 = 0
+    best_prec1 = 0
 
-        # Checkpoint to be loaded from disc
-        checkpointbasename='checkpoint_%d.pth.tar'%args.timepoint
-        checkpointfn=os.path.join(tmppth,checkpointbasename)
+    # Checkpoint to be loaded from disc
+    checkpointbasename='checkpoint_%d.pth.tar'%args.timepoint
+    checkpointfn=os.path.join(tmppth,checkpointbasename)
 
-        # Pull model from S3
-        s3 = boto3.resource('s3')
-        try:
-            s3fn=os.path.join(args.checkpointpath, checkpointbasename)
-            print("Attempting s3 download from %s"%s3fn )
-            s3.Bucket(args.checkpointbucket).download_file(s3fn,checkpointfn)
-        except botocore.exceptions.ClientError as e:
-            if e.response['Error']['Code'] == "404":
-                print("The object does not exist.")
+    # Pull model from S3
+    s3 = boto3.resource('s3')
+    try:
+        s3fn=os.path.join(args.checkpointpath, checkpointbasename)
+        print("Attempting s3 download from %s"%s3fn )
+        s3.Bucket(args.checkpointbucket).download_file(s3fn,checkpointfn)
+    except botocore.exceptions.ClientError as e:
+        if e.response['Error']['Code'] == "404":
+            print("The object does not exist.")
+        else:
+            raise
+
+    # Prepare place for output    
+    linearclassfn=os.path.join(args.linearclasspath,"linearclass_time_%d_conv_%d"%(args.timepoint,args.conv))
+    print("Will write output to bucket %s, %s",args.linearclassbucket,linearclassfn)
+
+    # Load model
+    model = load_model(checkpointfn)
+    model.cuda()
+    cudnn.benchmark = True
+
+    # Recover disc
+    os.remove(checkpointfn)
+
+    # freeze the features layers
+    for param in model.features.parameters():
+        param.requires_grad = False
+
+    # define loss function (criterion) and optimizer
+    criterion = nn.CrossEntropyLoss().cuda()
+
+    # data loading code
+    traindir = os.path.join(args.data, 'train')
+    valdir = os.path.join(args.data, 'val_in_folders')
+    valdir_double = os.path.join(args.data,'val_in_double_folders')
+    valdir_list=[]
+
+    # Load in AoA table if needed
+    if args.aoaval:
+        aoalist=pd.read_csv('matchingAoA_ImageNet_excel.csv')
+        for index,row in aoalist.iterrows():
+            node=row['node']
+            aoa=float(row['aoa'])
+            if not math.isnan(aoa):
+                valdir_list.append({'node':node,'pth':os.path.join(valdir_double,node),'aoa':aoa})
             else:
-                raise
-
-        # Prepare place for output    
-        linearclassfn=os.path.join(args.linearclasspath,"linearclass_time_%d_conv_%d"%(args.timepoint,args.conv))
-        print("Will write output to bucket %s, %s",args.linearclassbucket,linearclassfn)
-
-        # Load model
-        model = load_model(checkpointfn)
-        model.cuda()
-        cudnn.benchmark = True
-
-        # Recover disc
-        os.remove(checkpointfn)
-
-        # freeze the features layers
-        for param in model.features.parameters():
-            param.requires_grad = False
-
-        # define loss function (criterion) and optimizer
-        criterion = nn.CrossEntropyLoss().cuda()
-
-        # data loading code
-        traindir = os.path.join(args.data, 'train')
-        valdir = os.path.join(args.data, 'val_in_folders')
-        valdir_double = os.path.join(args.data,'val_in_double_folders')
-        valdir_list=[]
-
-        # Load in AoA table if needed
-        if args.aoaval:
-            aoalist=pd.read_csv('matchingAoA_ImageNet_excel.csv')
-            for index,row in aoalist.iterrows():
-                node=row['node']
-                aoa=float(row['aoa'])
-                if not math.isnan(aoa):
-                    valdir_list.append({'node':node,'pth':os.path.join(valdir_double,node),'aoa':aoa})
-                else:
-                    print('Not found %s'% node)
-                    
-            #valdir_list=valdir_list[:5] trim for testing
-            print('Using %d validation categories for aoa'%len(valdir_list))
+                print('Not found %s'% node)
+                
+        #valdir_list=valdir_list[:5] trim for testing
+        print('Using %d validation categories for aoa'%len(valdir_list))
 
 
-        normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406],
-                                    std=[0.229, 0.224, 0.225])
+    normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406],
+                                std=[0.229, 0.224, 0.225])
 
-        if args.tencrops:
-            transformations_val = [
-                transforms.Resize(256),
-                transforms.TenCrop(224),
-                transforms.Lambda(lambda crops: torch.stack([normalize(transforms.ToTensor()(crop)) for crop in crops])),
-            ]
-        else:
-            transformations_val = [transforms.Resize(256),
-                                transforms.CenterCrop(224),
-                                transforms.ToTensor(),
-                                normalize]
+    if args.tencrops:
+        transformations_val = [
+            transforms.Resize(256),
+            transforms.TenCrop(224),
+            transforms.Lambda(lambda crops: torch.stack([normalize(transforms.ToTensor()(crop)) for crop in crops])),
+        ]
+    else:
+        transformations_val = [transforms.Resize(256),
+                            transforms.CenterCrop(224),
+                            transforms.ToTensor(),
+                            normalize]
 
-        transformations_train = [transforms.Resize(256),
-                                transforms.CenterCrop(256),
-                                transforms.RandomCrop(224),
-                                transforms.RandomHorizontalFlip(),
-                                transforms.ToTensor(),
-                                normalize]
-        train_dataset = datasets.ImageFolder(
-            traindir,
-            transform=transforms.Compose(transformations_train)
-        )
+    transformations_train = [transforms.Resize(256),
+                            transforms.CenterCrop(256),
+                            transforms.RandomCrop(224),
+                            transforms.RandomHorizontalFlip(),
+                            transforms.ToTensor(),
+                            normalize]
+    train_dataset = datasets.ImageFolder(
+        traindir,
+        transform=transforms.Compose(transformations_train)
+    )
 
-        val_dataset = datasets.ImageFolder(
-            valdir,
-            transform=transforms.Compose(transformations_val)
-        )
+    val_dataset = datasets.ImageFolder(
+        valdir,
+        transform=transforms.Compose(transformations_val)
+    )
 
-        # Load up individual categories for AoA validation
-        if args.aoaval:
-            print("Loading individual categories for validation")
-            val_list_dataset=[]
-            val_list_loader=[]
-            val_list_remap=[]
-            for entry in valdir_list:
-                val_list_dataset.append(datasets.ImageFolder(
-                                        entry['pth'],
-                                        transform=transforms.Compose(transformations_val)))
+    # Load up individual categories for AoA validation
+    if args.aoaval:
+        print("Loading individual categories for validation")
+        val_list_dataset=[]
+        val_list_loader=[]
+        val_list_remap=[]
+        for entry in valdir_list:
+            val_list_dataset.append(datasets.ImageFolder(
+                                    entry['pth'],
+                                    transform=transforms.Compose(transformations_val)))
 
-                val_list_loader.append(torch.utils.data.DataLoader(val_list_dataset[-1],
-                                                batch_size=50,
-                                                shuffle=False,
-                                                num_workers=args.workers))
-                val_list_remap.append(train_dataset.classes.index(entry['node']))
+            val_list_loader.append(torch.utils.data.DataLoader(val_list_dataset[-1],
+                                            batch_size=50,
+                                            shuffle=False,
+                                            num_workers=args.workers))
+            val_list_remap.append(train_dataset.classes.index(entry['node']))
 
-        train_loader = torch.utils.data.DataLoader(train_dataset,
-                                                batch_size=args.batch_size,
-                                                shuffle=True,
-                                                num_workers=args.workers,
-                                                pin_memory=True)
-        val_loader = torch.utils.data.DataLoader(val_dataset,
-                                                batch_size=int(args.batch_size/2),
-                                                shuffle=False,
-                                                num_workers=args.workers)
+    train_loader = torch.utils.data.DataLoader(train_dataset,
+                                            batch_size=args.batch_size,
+                                            shuffle=True,
+                                            num_workers=args.workers,
+                                            pin_memory=True)
+    val_loader = torch.utils.data.DataLoader(val_dataset,
+                                            batch_size=int(args.batch_size/2),
+                                            shuffle=False,
+                                            num_workers=args.workers)
 
-        # logistic regression
-        print("Setting up regression")
+    # logistic regression
+    print("Setting up regression")
 
-        reglog = RegLog(args.conv, len(train_dataset.classes)).cuda()
-        optimizer = torch.optim.SGD(
-            filter(lambda x: x.requires_grad, reglog.parameters()),
-            args.lr,
-            momentum=args.momentum,
-            weight_decay=10**args.weight_decay
-        )
+    reglog = RegLog(args.conv, len(train_dataset.classes)).cuda()
+    optimizer = torch.optim.SGD(
+        filter(lambda x: x.requires_grad, reglog.parameters()),
+        args.lr,
+        momentum=args.momentum,
+        weight_decay=10**args.weight_decay
+    )
 
-        # create logs
-        exp_log = os.path.join(tmppth, 'log')
-        if not os.path.isdir(exp_log):
-            os.makedirs(exp_log)
+    # create logs
+    exp_log = os.path.join(tmppth, 'log')
+    if not os.path.isdir(exp_log):
+        os.makedirs(exp_log)
 
-        loss_log = Logger(os.path.join(exp_log, 'loss_log'))
-        prec1_log = Logger(os.path.join(exp_log, 'prec1'))
-        prec5_log = Logger(os.path.join(exp_log, 'prec5'))
+    loss_log = Logger(os.path.join(exp_log, 'loss_log'))
+    prec1_log = Logger(os.path.join(exp_log, 'prec1'))
+    prec5_log = Logger(os.path.join(exp_log, 'prec5'))
 
 
 
-        # If savedmodel already exists, load this 
-        print("Looking for saved decoder")
-        if args.toplayer_epochs:
-            filename="model_toplayer_epoch_%d.pth.tar"%(args.toplayer_epochs-1)
-        else:
-            filename='model_best.pth.tar'
-        savedmodelpth=os.path.join(tmppth,filename)
+    # If savedmodel already exists, load this 
+    print("Looking for saved decoder")
+    if args.toplayer_epochs:
+        filename="model_toplayer_epoch_%d.pth.tar"%(args.toplayer_epochs-1)
+    else:
+        filename='model_best.pth.tar'
+    savedmodelpth=os.path.join(tmppth,filename)
 
-        s3_client = boto3.client('s3')
+    s3_client = boto3.client('s3')
+    try:
+        # Try to download desired toplayer_epoch
+        response = s3_client.download_file(args.linearclassbucket,os.path.join(linearclassfn,filename),savedmodelpth)
+        print('Loading saved decoder %s (s3: %s)'%(savedmodelpth,os.path.join(linearclassfn,filename)))
+        model_with_decoder=torch.load(savedmodelpth)
+        reglog.load_state_dict(model_with_decoder['reglog_state_dict'])
+        lastepoch=model_with_decoder['epoch']
+    except:
         try:
-            # Try to download desired toplayer_epoch
-            response = s3_client.download_file(args.linearclassbucket,os.path.join(linearclassfn,filename),savedmodelpth)
-            print('Loading saved decoder %s (s3: %s)'%(savedmodelpth,os.path.join(linearclassfn,filename)))
+            # Fallback to last saved toplayer_epoch, which we'll use as a starting point                
+            response = s3_client.download_file(args.linearclassbucket,os.path.join(linearclassfn,'model_best.pth.tar'),savedmodelpth)
+            print('Loading best-so-far saved decoder %s (s3:%s)'%(savedmodelpth,os.path.join(linearclassfn,'model_best.pth.tar')))
             model_with_decoder=torch.load(savedmodelpth)
-            reglog.load_state_dict(model_with_decoder['reglog_state_dict'])
-            lastepoch=model_with_decoder['epoch']
-        except:
-            try:
-                # Fallback to last saved toplayer_epoch, which we'll use as a starting point                
-                response = s3_client.download_file(args.linearclassbucket,os.path.join(linearclassfn,'model_best.pth.tar'),savedmodelpth)
-                print('Loading best-so-far saved decoder %s (s3:%s)'%(savedmodelpth,os.path.join(linearclassfn,'model_best.pth.tar')))
-                model_with_decoder=torch.load(savedmodelpth)
-                print('Previous model epoch %d'%model_with_decoder['epoch'])
-                # But check it isn't greater than desired stage before loading 
-                if model_with_decoder['epoch']<=args.toplayer_epochs:
-                    lastepoch=model_with_decoder['epoch']
-                    reglog.load_state_dict(model_with_decoder['reglog_state_dict'])
-                else:
-                    print('Previous model epoch %d was past desired one %d'%(model_with_decoder['epoch'],args.toplayer_epochs))
-                    lastepoch=0
-            except:
+            print('Previous model epoch %d'%model_with_decoder['epoch'])
+            # But check it isn't greater than desired stage before loading 
+            if model_with_decoder['epoch']<=args.toplayer_epochs:
+                lastepoch=model_with_decoder['epoch']
+                reglog.load_state_dict(model_with_decoder['reglog_state_dict'])
+            else:
+                print('Previous model epoch %d was past desired one %d'%(model_with_decoder['epoch'],args.toplayer_epochs))
                 lastepoch=0
+        except:
+            lastepoch=0
 
-        print("Will run from epoch %d to epoch %d"%(lastepoch,args.toplayer_epochs-1))
+    print("Will run from epoch %d to epoch %d"%(lastepoch,args.toplayer_epochs-1))
 
-        for epoch in range(lastepoch,args.toplayer_epochs):
-        # Top layer epochs
-            end = time.time()
-            # train for one epoch
-            train(train_loader, model, reglog, criterion, optimizer, epoch)
+    for epoch in range(lastepoch,args.toplayer_epochs):
+    # Top layer epochs
+        end = time.time()
+        # train for one epoch
+        train(train_loader, model, reglog, criterion, optimizer, epoch)
 
-            # evaluate on validation set
-            prec1, prec5, loss = validate(val_loader, model, reglog, criterion,target_remap=range(1000))
+        # evaluate on validation set
+        prec1, prec5, loss = validate(val_loader, model, reglog, criterion,target_remap=range(1000))
 
-            loss_log.log(loss)
-            prec1_log.log(prec1)
-            prec5_log.log(prec5)
+        loss_log.log(loss)
+        prec1_log.log(prec1)
+        prec5_log.log(prec5)
 
-            # remember best prec@1 and save checkpoint
-            is_best = prec1 > best_prec1
-            best_prec1 = max(prec1, best_prec1)
-            filename='model_toplayer_epoch_%d.pth.tar'%epoch
-            
-            modelfn=os.path.join(tmppth, filename)
+        # remember best prec@1 and save checkpoint
+        is_best = prec1 > best_prec1
+        best_prec1 = max(prec1, best_prec1)
+        filename='model_toplayer_epoch_%d.pth.tar'%epoch
+        
+        modelfn=os.path.join(tmppth, filename)
 
-            torch.save({
-                'epoch': epoch + 1,
-                'arch': 'alexnet',
-                'state_dict': model.state_dict(),
-                'reglog_state_dict': reglog.state_dict(),       # Also save decoding layers
-                'prec5': prec5,
-                'best_prec1': best_prec1,
-                'optimizer' : optimizer.state_dict(),
-            }, savedmodelpth)
+        torch.save({
+            'epoch': epoch + 1,
+            'arch': 'alexnet',
+            'state_dict': model.state_dict(),
+            'reglog_state_dict': reglog.state_dict(),       # Also save decoding layers
+            'prec5': prec5,
+            'best_prec1': best_prec1,
+            'optimizer' : optimizer.state_dict(),
+        }, savedmodelpth)
 
+        # Save output to check 
+        s3_client = boto3.client('s3')
+        response = s3_client.upload_file(savedmodelpth,args.linearclassbucket,os.path.join(linearclassfn,filename))
+        for logfile in ['prec1','prec5','loss_log']:
+            localfn=os.path.join(tmppth,'log',logfile)
+            response = s3_client.upload_file(localfn,args.linearclassbucket,os.path.join(linearclassfn,'log',"%s_toplayer_epoch_%d"%(logfile,epoch)))
+
+        if is_best:
             # Save output to check 
             s3_client = boto3.client('s3')
-            response = s3_client.upload_file(savedmodelpth,args.linearclassbucket,os.path.join(linearclassfn,filename))
+            response = s3_client.upload_file(savedmodelpth,args.linearclassbucket,os.path.join(linearclassfn,'model_best.pth.tar'))                
             for logfile in ['prec1','prec5','loss_log']:
                 localfn=os.path.join(tmppth,'log',logfile)
-                response = s3_client.upload_file(localfn,args.linearclassbucket,os.path.join(linearclassfn,'log',"%s_toplayer_epoch_%d"%(logfile,epoch)))
+                response = s3_client.upload_file(localfn,args.linearclassbucket,os.path.join(linearclassfn,'log',logfile))
 
-            if is_best:
-                # Save output to check 
-                s3_client = boto3.client('s3')
-                response = s3_client.upload_file(savedmodelpth,args.linearclassbucket,os.path.join(linearclassfn,'model_best.pth.tar'))                
-                for logfile in ['prec1','prec5','loss_log']:
-                    localfn=os.path.join(tmppth,'log',logfile)
-                    response = s3_client.upload_file(localfn,args.linearclassbucket,os.path.join(linearclassfn,'log',logfile))
+        # Tidy up
+        for logfile in ['prec1','prec5','loss_log']:
+            localfn=os.path.join(tmppth,'log',logfile)
+            os.remove(localfn)
+        os.remove(savedmodelpth)
 
-            # Tidy up
-            for logfile in ['prec1','prec5','loss_log']:
-                localfn=os.path.join(tmppth,'log',logfile)
-                os.remove(localfn)
-            os.remove(savedmodelpth)
+    if args.aoaval:
+        # Validate individual categories, so loss can be compared to AoA
 
-        if args.aoaval:
-            # Validate individual categories, so loss can be compared to AoA
+        # # To check weights loaded OK
+        # # evaluate on validation set
+        # prec1, prec5, loss = validate(val_loader, model, reglog, criterion)
 
-            # # To check weights loaded OK
-            # # evaluate on validation set
-            # prec1, prec5, loss = validate(val_loader, model, reglog, criterion)
+        # loss_log.log(loss)
+        # prec1_log.log(prec1)
+        # prec5_log.log(prec5)
 
-            # loss_log.log(loss)
-            # prec1_log.log(prec1)
-            # prec5_log.log(prec5)
-
-            aoares={}
+        aoares={}
+        
+        for idx,row in enumerate(zip(valdir_list,val_list_loader,val_list_remap)):
+            # evaluate on validation set
+            print("AOA validation %d/%d"%(idx,len(valdir_list)))
+            prec1_tmp, prec5_tmp, loss_tmp = validate(row[1], model, reglog, criterion,target_remap=[row[2]])
+            aoares[row[0]['node']]={'prec1':float(prec1_tmp),'prec5':float(prec5_tmp),'loss':float(loss_tmp),'aoa':row[0]['aoa']}
             
-            for idx,row in enumerate(zip(valdir_list,val_list_loader,val_list_remap)):
-                # evaluate on validation set
-                print("AOA validation %d/%d"%(idx,len(valdir_list)))
-                prec1_tmp, prec5_tmp, loss_tmp = validate(row[1], model, reglog, criterion,target_remap=[row[2]])
-                aoares[row[0]['node']]={'prec1':float(prec1_tmp),'prec5':float(prec5_tmp),'loss':float(loss_tmp),'aoa':row[0]['aoa']}
-                
 
-            # Save to JSON
-            aoaresultsfn='aoaresults_toplayer_epoch_%d.json'%(args.toplayer_epochs-1)
-            aoapth=os.path.join(tmppth, aoaresultsfn)
-            with open(aoapth,'w') as f:
-                json.dump(aoares,f)
-            response = s3_client.upload_file(aoapth,args.linearclassbucket,os.path.join(linearclassfn,aoaresultsfn))
-            os.remove(aoapth)
+        # Save to JSON
+        aoaresultsfn='aoaresults_toplayer_epoch_%d.json'%(args.toplayer_epochs-1)
+        aoapth=os.path.join(tmppth, aoaresultsfn)
+        with open(aoapth,'w') as f:
+            json.dump(aoares,f)
+        response = s3_client.upload_file(aoapth,args.linearclassbucket,os.path.join(linearclassfn,aoaresultsfn))
+        os.remove(aoapth)
 
-        # Clean up temporary directories
-        os.rmdir(exp_log)
-        os.rmdir(tmppth)
+    # Clean up temporary directories
+    os.rmdir(exp_log)
+    os.rmdir(tmppth)
 
 
 def is_number(s):
