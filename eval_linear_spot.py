@@ -236,6 +236,7 @@ def main():
                 response = s3_client.download_file(args.linearclassbucket,os.path.join(linearclassfn,'model_best.pth.tar'),'savedmodelpth')
                 print('Loading best-so-far saved decoder %s (s3:%s)'%(savedmodelpth,os.path.join(linearclassfn,'model_best.pth.tar')))
                 model_with_decoder=torch.load(savedmodelpth)
+                print('Previous model epoch %d'%model_with_decoder['epoch'])
                 # But check it isn't greater than desired stage before loading 
                 if model_with_decoder['epoch']<=args.toplayer_epochs:
                     lastepoch=model_with_decoder['epoch']
